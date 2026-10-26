@@ -1,7 +1,7 @@
 """Rooms, question generation, scoring and the end-of-game cards.
 
 A profile is the slice of a player's Spotify history the game needs: top
-tracks and artists over the last 4 weeks (short) and the last year (long),
+tracks and artists over the last 4 weeks (short) and all time (long),
 plus their last 50 plays with the local hour each was played. Tokens never
 reach this module.
 
@@ -215,7 +215,7 @@ def _who(pid: str, name: str, s: dict, st: dict[str, dict]) -> list[tuple[str, s
     if m and m["name"] not in s["top10_long"] and not s["picked"]:
         out.append(("artists", f"Who's in a brand new {m['name']} phase?",
                     lambda x, m=m: x["top_artist_month"] is not None and x["top_artist_month"]["name"] == m["name"] and m["name"] not in x["top10_long"],
-                    f"{m['name']} is {name}'s #1 this month and wasn't in their top 10 for the year.", m.get("image")))
+                    f"{m['name']} is {name}'s #1 this month and isn't in their all-time top 10.", m.get("image")))
     if s["top_genre"]:
         g = s["top_genre"]
         out.append(("genre", f"Whose top genre is {g}?", lambda x, g=g: x["top_genre"] == g,
