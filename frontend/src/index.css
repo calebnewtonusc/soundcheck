@@ -8,19 +8,21 @@
   --color-blue: #234c8d;
   --color-green: #1b5a33;
   --color-leaf: #1f7a3c;
+  --color-gain: #4fb36d;
   --color-red: #9a3b2f;
   --color-mustard: #cb9444;
   --color-app: #131314;
   --color-tile: #242526;
+  --color-tile-up: #2d2f30;
   --color-line: #393d3c;
   --color-mute: #8b8d8c;
   --color-bubble: #2a5537;
 
-  --font-display: "Archivo", "Arial Black", sans-serif;
-  --font-body: "Avenir Next", "Nunito Sans", "Helvetica Neue", sans-serif;
+  --font-display: "Archivo Variable", "Arial Black", sans-serif;
+  --font-body: "Avenir Next", "Nunito Sans Variable", "Helvetica Neue", sans-serif;
   --font-cond: "Anton", "Impact", sans-serif;
-  --font-ui: "Space Grotesk", "Helvetica Neue", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-ui: "Space Grotesk Variable", "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
 }
 
 @layer base {

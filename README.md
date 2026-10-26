@@ -6,15 +6,18 @@ SoundCheck turns a group's Spotify listening history into a party quiz. Everyone
 
 ## How a game runs
 
-1. The host starts a room and shares the 4-letter code.
-2. Each player connects Spotify, or joins with a sample profile.
-3. SoundCheck reads top tracks, top artists and the last 50 plays once, writes 8 questions across songs, artists and genre, and drops the token.
-4. Everyone picks a friend on their phone. A right answer is 100 points plus up to 50 for speed. The person a question is about gets 50 for every friend who got them right.
-5. The report shows the game cards and final scores. Rematch keeps the room.
+1. The host starts a room and texts the link. The link keeps working for 30 days, so a friend group reuses it every week and builds season standings.
+2. Everyone brings their taste one of four ways: quick picks (search and pick 3 to 5 artists and songs), an upload of their Spotify data export (read on their own phone, only the summary is sent), Spotify login (limited to 5 accounts while the app is in Spotify Development Mode), or a sample listener.
+3. The host picks a mode (Classic, Wrapped, Road trip, Decades, Genres), a length (5, 8 or 12) and optionally team mode or AI wording.
+4. Questions come in two shapes: pick a friend ("Who's the biggest Drake fan in the room?") or pick an answer ("What's the last song Kaylie played?"). Right answers score 100 plus up to 50 for speed, and whoever a question is about gets 50 for every friend who got them right.
+5. After each reveal everyone can react (CALLED IT, NO WAY, SUS, RESPECT). The report shows the four game cards, final scores, team results and a story-sized share card.
+6. Rematch keeps the room, skips questions the group has already seen, and updates the season table.
+
+Your taste is saved on your phone, so the next room is one tap ("Join as Caleb").
 
 ## Stack
 
-React + Vite + Tailwind in `frontend/`, FastAPI in `backend/`, Spotify Web API. Rooms live in memory for now; Supabase is the planned store.
+React + Vite + Tailwind in `frontend/`, FastAPI in `backend/`, Spotify Web API for login and catalog search, MusicBrainz for genres (Spotify stopped returning them in February 2026), Supabase for room snapshots, Claude for the optional question wording. Installable as a home screen app.
 
 ## Run it
 
@@ -25,7 +28,7 @@ cd frontend && npm install && npm run build && cd ..
 .venv/bin/uvicorn backend.main:app --port 8888
 ```
 
-Open http://127.0.0.1:8888. The Spotify app needs `http://127.0.0.1:8888/callback` as a Redirect URI. While the app is in Spotify Development Mode, only accounts added under User Management can sign in, so "Sample profile" and "Add demo friends" exist for playing without them.
+Open http://127.0.0.1:8888. Spotify login needs `SPOTIFY_REDIRECT_URI` set and the same URI added to the Spotify app; without it the login option hides and quick picks, uploads and samples still work. Spotify Development Mode allows 5 signed-in accounts per app, and Extended Quota requires a registered business with 250k monthly users, which is why quick picks and uploads exist.
 
 Tests: `.venv/bin/python -m pytest tests`
 

@@ -1,25 +1,37 @@
 import {
   useCallback,
   useEffect,
-  useRef,
   useState,
-  type FormEvent,
 } from "react";
-import { api, loadCreds, saveCreds, type Creds, type RoomState } from "./api";
-import { go } from "./App";
 import {
-  Arrow,
+  ApiError,
+  api,
+  clearCreds,
+  loadCreds,
+  saveCreds,
+  type Creds,
+  type Mode,
+  type RoomState,
+} from "./api";
+import { go } from "./App";
+import { Game } from "./Game";
+import { Report } from "./Report";
+import { Join, SOURCE_LABEL } from "./Join";
+import { savePass, type Profile, type Source } from "./profiles";
+import { TasteBuilder } from "./Taste";
+import {
+  Avatar,
   Bubble,
   Button,
   Page,
   Slide,
   Star,
   Toast,
-  Wordmark,
 } from "./ui";
 
+// One poll a second: fast enough that a reveal lands on every phone in the
+// same beat, cheap enough for a room of twenty on one instance.
 const POLL_MS = 1000;
-const pad = (n: number) => String(n).padStart(2, "0");
 
 export function Room({ code }: { code: string }) {
   const [creds, setCreds] = useState<Creds | null>(() => loadCreds(code));
@@ -27,6 +39,14 @@ export function Room({ code }: { code: string }) {
   const [missing, setMissing] = useState(false);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState("");
+  const [aiOn, setAiOn] = useState(false);
+
+  useEffect(() => {
+    api.health().then(
+      (h) => setAiOn(h.ai),
+      () => setAiOn(false),
+    );
+  }, []);
 
   // Coming back from Spotify: pick creds or an error off the URL, then clean it.
   useEffect(() => {
@@ -36,6 +56,11 @@ export function Room({ code }: { code: string }) {
     if (pid && key) {
       saveCreds(code, { pid, key });
       setCreds({ pid, key });
+      // Back from Spotify: keep the profile on this phone for next time.
+      api.myProfile(code, { pid, key }).then(
+        (p) => savePass({ ...p, saved: Date.now() }),
+        () => undefined,
+      );
     }
     const err = q.get("error");
     if (err) setError(err);
@@ -48,8 +73,7 @@ export function Room({ code }: { code: string }) {
       setMissing(false);
       setOffline(false);
     } catch (e) {
-      if (e instanceof Error && e.message.startsWith("No room"))
-        setMissing(true);
+      if (e instanceof ApiError && e.status === 404) setMissing(true);
       else setOffline(true);
     }
   }, [code, creds]);
@@ -86,7 +110,8 @@ export function Room({ code }: { code: string }) {
         >
           <p className="display text-[clamp(40px,8vw,120px)]">No room {code}</p>
           <p className="caps text-[clamp(16px,2vw,26px)]">
-            That code doesn't match an open room. It might have ended.
+            That code doesn't match an open room. Rooms close after two quiet
+            hours.
           </p>
           <Button onClick={() => go("/")}>Back to start</Button>
         </Slide>
@@ -112,22 +137,24 @@ export function Room({ code }: { code: string }) {
     );
   }
 
-  const me = state.me;
-  if (!me || !creds) {
+  if (!state.me || !creds) {
     return (
       <>
         {toast}
         <Join
           code={code}
           state={state}
-          onJoined={(c) => (saveCreds(code, c), setCreds(c))}
+          onJoined={(c) => {
+            saveCreds(code, c);
+            setCreds(c);
+          }}
           onError={setError}
         />
       </>
     );
   }
 
-  const isHost = state.host_id === me;
+  const isHost = state.host_id === state.me;
   return (
     <>
       {toast}
@@ -135,8 +162,18 @@ export function Room({ code }: { code: string }) {
         <Lobby
           state={state}
           isHost={isHost}
+          aiAvailable={aiOn}
           onBots={() => act(() => api.bots(code, creds))}
           onStart={() => act(() => api.start(code, creds))}
+          onSettings={(s) => act(() => api.settings(code, creds, s))}
+          onShuffle={() => act(() => api.shuffleTeams(code, creds))}
+          onKick={(pid) => act(() => api.kick(code, creds, pid))}
+          onTaste={(source, profile) => act(() => api.updateProfile(code, creds, source, profile))}
+          onLeave={async () => {
+            await act(() => api.leave(code, creds));
+            clearCreds(code);
+            go("/");
+          }}
         />
       )}
       {(state.phase === "question" || state.phase === "reveal") && (
@@ -145,6 +182,7 @@ export function Room({ code }: { code: string }) {
           isHost={isHost}
           onAnswer={(id) => act(() => api.answer(code, creds, id))}
           onNext={() => act(() => api.next(code, creds))}
+          onReact={(label) => act(() => api.react(code, creds, label))}
         />
       )}
       {state.phase === "report" && (
@@ -158,158 +196,118 @@ export function Room({ code }: { code: string }) {
   );
 }
 
-/* ------------------------------------------------------------------ join */
-
-function Join({
-  code,
-  state,
-  onJoined,
-  onError,
-}: {
-  code: string;
-  state: RoomState;
-  onJoined: (c: Creds) => void;
-  onError: (m: string) => void;
-}) {
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [spotifyOn, setSpotifyOn] = useState(true);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    api.health().then(
-      (h) => setSpotifyOn(h.spotify),
-      () => setSpotifyOn(false),
-    );
-    inputRef.current?.focus();
-  }, []);
-
-  const started = state.phase !== "lobby";
-  const ready = name.trim().length > 0 && !busy && !started;
-
-  function spotify(e: FormEvent) {
-    e.preventDefault();
-    if (!ready) return;
-    setBusy(true);
-    window.location.href = api.loginUrl(code, name.trim());
-  }
-
-  async function sample() {
-    if (!ready) return;
-    setBusy(true);
-    try {
-      onJoined(await api.joinSample(code, name.trim()));
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Couldn't join.");
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Page>
-      <Slide
-        tone="red"
-        className="flex min-h-[calc(100dvh-24px)] flex-col justify-center px-6 py-16 sm:min-h-[calc(100dvh-48px)] sm:px-[10%]"
-      >
-        <div className="rise flex flex-col gap-10 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
-          <div>
-            <p className="caps text-[clamp(14px,1.5vw,20px)] opacity-80">
-              Room
-            </p>
-            <p className="display text-[clamp(64px,9vw,150px)] tracking-[0.04em]">
-              {code}
-            </p>
-            <p className="caps mt-3 text-[clamp(15px,1.6vw,22px)]">
-              {state.players.length === 0
-                ? "You're first in."
-                : `${state.players.map((p) => p.name).join(", ")} ${state.players.length === 1 ? "is" : "are"} already here.`}
-            </p>
-          </div>
-
-          <form
-            onSubmit={spotify}
-            className="flex w-full min-w-0 max-w-lg flex-col gap-6 lg:shrink-0"
-          >
-            <Wordmark stacked className="text-[clamp(44px,5vw,76px)]" />
-            <label className="caps flex flex-col gap-2 text-[14px]">
-              <span className="opacity-80">
-                1 &nbsp;What do your friends call you?
-              </span>
-              <input
-                ref={inputRef}
-                value={name}
-                onChange={(e) => setName(e.target.value.slice(0, 20))}
-                placeholder="YOUR NAME"
-                autoComplete="given-name"
-                className="caps rounded-sm border-b-[3px] border-cream/70 bg-transparent pb-2 text-[clamp(26px,3vw,40px)] text-cream placeholder:text-cream/40 focus-visible:border-cream focus-visible:outline-1 focus-visible:outline-offset-8 focus-visible:outline-cream/40"
-              />
-            </label>
-            <span className="caps -mb-3 text-[14px] opacity-80">
-              2 &nbsp;Bring your listening history
-            </span>
-            {started ? (
-              <p className="caps text-[18px]">
-                This game already started. Hang tight for the rematch.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-3 sm:flex-row">
-                {spotifyOn && (
-                  <Button type="submit" disabled={!ready} className="sm:flex-1">
-                    {busy ? "Opening Spotify" : "Connect Spotify"}
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant={spotifyOn ? "ghost" : "solid"}
-                  disabled={!ready}
-                  onClick={sample}
-                  className="sm:flex-1"
-                >
-                  Sample profile
-                </Button>
-              </div>
-            )}
-            <p className="font-mono text-[12px] leading-relaxed opacity-75">
-              We read your top tracks, top artists and last 50 plays once, to
-              write the questions. Your Spotify login is never stored.
-            </p>
-          </form>
-        </div>
-      </Slide>
-    </Page>
-  );
-}
-
 /* ----------------------------------------------------------------- lobby */
 
+const LENGTHS = [
+  { n: 5, label: "Quick" },
+  { n: 8, label: "Classic" },
+  { n: 12, label: "Long" },
+];
+
+const MODES: { id: Mode; label: string; line: string }[] = [
+  { id: "classic", label: "Classic", line: "A bit of everything" },
+  { id: "wrapped", label: "Wrapped", line: "Your whole year, called out" },
+  {
+    id: "roadtrip",
+    label: "Road trip",
+    line: "What's on repeat. 30s to answer",
+  },
+  { id: "decades", label: "Decades", line: "Release years and throwbacks" },
+  { id: "genres", label: "Genres", line: "Who listens to what" },
+];
+
 function sourceLine(p: RoomState["players"][number]) {
-  if (p.bot) return "Demo friend";
-  return p.source === "spotify" ? "Spotify connected" : "Sample listener";
+  return p.bot ? "Demo friend" : SOURCE_LABEL[p.source];
+}
+
+type LobbyProps = {
+  state: RoomState;
+  isHost: boolean;
+  aiAvailable: boolean;
+  onBots: () => void;
+  onStart: () => void;
+  onSettings: (s: {
+    length?: number;
+    mode?: Mode;
+    teams?: boolean;
+    ai?: boolean;
+  }) => void;
+  onShuffle: () => void;
+  onKick: (pid: string) => void;
+  onTaste: (source: Source, profile: Profile) => Promise<void>;
+  onLeave: () => void;
+};
+
+function Chip({
+  on,
+  onClick,
+  children,
+  className = "",
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={`press caps rounded-md border-2 px-3 py-2.5 text-left text-[14px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream ${
+        on
+          ? "border-cream bg-cream text-green"
+          : "border-cream/50 hover:border-cream"
+      } ${className}`}
+    >
+      {children}
+    </button>
+  );
 }
 
 function Lobby({
   state,
   isHost,
+  aiAvailable,
   onBots,
   onStart,
-}: {
-  state: RoomState;
-  isHost: boolean;
-  onBots: () => void;
-  onStart: () => void;
-}) {
+  onSettings,
+  onShuffle,
+  onKick,
+  onTaste,
+  onLeave,
+}: LobbyProps) {
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState<"picks" | "export" | null>(null);
+  const me = state.players.find((p) => p.id === state.me);
+  const [starting, setStarting] = useState(false);
   const host = state.players.find((p) => p.id === state.host_id);
   const link = `${window.location.origin}/room/${state.code}`;
+  const allBots = state.players.filter((p) => p.bot).length >= 4;
+  const mode = MODES.find((m) => m.id === state.mode) ?? MODES[0];
 
-  async function copy() {
+  async function invite() {
     try {
+      if (navigator.share && window.matchMedia("(pointer: coarse)").matches) {
+        await navigator.share({
+          title: "SoundCheck",
+          text: `Join my SoundCheck room ${state.code}`,
+          url: link,
+        });
+        return;
+      }
       await navigator.clipboard.writeText(link);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       setCopied(false);
     }
+  }
+
+  async function start() {
+    setStarting(true);
+    await onStart();
+    setStarting(false);
   }
 
   return (
@@ -332,28 +330,165 @@ function Lobby({
                 {state.code}
               </p>
             </div>
-            <Button variant="ghost" onClick={copy} className="self-start">
-              {copied ? "Link copied" : "Copy invite link"}
+            <Button variant="ghost" onClick={invite} className="self-start">
+              {copied ? "Link copied" : "Invite friends"}
             </Button>
-            <p className="caps text-[clamp(15px,1.5vw,20px)] leading-snug opacity-90">
-              {state.players.length} in the room.{" "}
-              {state.players.length < 2
-                ? "Need at least 2 to play."
-                : "Enough to start."}
-            </p>
+
             {isHost ? (
-              <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
-                <Button onClick={onStart} disabled={state.players.length < 2}>
-                  Start the quiz
-                </Button>
-                <Button variant="ghost" onClick={onBots}>
-                  Add demo friends
-                </Button>
-              </div>
+              <>
+                <fieldset>
+                  <legend className="caps mb-3 text-[14px] opacity-80">
+                    Mode
+                  </legend>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
+                    {MODES.map((m) => (
+                      <Chip
+                        key={m.id}
+                        on={state.mode === m.id}
+                        onClick={() => onSettings({ mode: m.id })}
+                      >
+                        {m.label}
+                        <span className="block font-mono text-[11px] normal-case leading-snug opacity-75">
+                          {m.line}
+                        </span>
+                      </Chip>
+                    ))}
+                  </div>
+                </fieldset>
+                <fieldset>
+                  <legend className="caps mb-3 text-[14px] opacity-80">
+                    Length
+                  </legend>
+                  <div className="flex gap-2">
+                    {LENGTHS.map((l) => (
+                      <Chip
+                        key={l.n}
+                        on={state.length === l.n}
+                        onClick={() => onSettings({ length: l.n })}
+                        className="flex-1 text-center"
+                      >
+                        {l.label}
+                        <span className="block font-mono text-[11px] normal-case opacity-75">
+                          {l.n} questions
+                        </span>
+                      </Chip>
+                    ))}
+                  </div>
+                </fieldset>
+                <div className="flex flex-wrap gap-2">
+                  <Chip
+                    on={state.teams}
+                    onClick={() => onSettings({ teams: !state.teams })}
+                  >
+                    Team mode {state.teams ? "on" : "off"}
+                  </Chip>
+                  {state.teams && (
+                    <Chip on={false} onClick={onShuffle}>
+                      Shuffle teams
+                    </Chip>
+                  )}
+                  {aiAvailable && (
+                    <Chip
+                      on={state.ai}
+                      onClick={() => onSettings({ ai: !state.ai })}
+                    >
+                      AI wording {state.ai ? "on" : "off"}
+                    </Chip>
+                  )}
+                </div>
+                {state.ai && (
+                  <p className="font-mono text-[12px] leading-relaxed opacity-80">
+                    Claude rewrites how each question sounds. Names, songs and
+                    numbers stay exact, and the WHY under every answer is always
+                    the plain fact.
+                  </p>
+                )}
+                <p className="caps text-[clamp(15px,1.5vw,20px)] leading-snug opacity-90">
+                  {state.players.length} in the room.{" "}
+                  {state.players.length < 2
+                    ? "Need at least 2 to play."
+                    : "Enough to start."}
+                </p>
+                <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
+                  <Button
+                    onClick={start}
+                    disabled={state.players.length < 2 || starting}
+                  >
+                    {starting
+                      ? state.ai
+                        ? "Writing questions"
+                        : "Starting"
+                      : "Start the quiz"}
+                  </Button>
+                  {!allBots && (
+                    <Button variant="ghost" onClick={onBots}>
+                      Add demo friends
+                    </Button>
+                  )}
+                </div>
+              </>
             ) : (
-              <p className="caps text-[18px]">
-                Waiting for {host?.name ?? "the host"} to start.
+              <p className="caps text-[18px] leading-snug">
+                {state.players.length} in the room. Waiting for{" "}
+                {host?.name ?? "the host"} to start a {state.length}-question{" "}
+                {mode.label} game
+                {state.teams ? " in teams" : ""}.
               </p>
+            )}
+            {state.season && state.season.games > 0 && (
+              <div className="rounded-md border-2 border-cream/40 p-4">
+                <p className="caps text-[14px] opacity-80">
+                  Season standings &middot; {state.season.games} {state.season.games === 1 ? "game" : "games"}
+                </p>
+                <ol className="mt-3 flex flex-col gap-1.5">
+                  {state.season.table.slice(0, 6).map((r, i) => (
+                    <li key={r.id} className={`flex items-baseline gap-3 ${r.here ? "" : "opacity-60"}`}>
+                      <span className="font-mono text-[12px] opacity-70">{String(i + 1).padStart(2, "0")}</span>
+                      <span className="font-cond flex-1 truncate text-[24px] uppercase leading-none">{r.name}</span>
+                      <span className="font-mono text-[12px]">
+                        {r.wins} {r.wins === 1 ? "win" : "wins"} / {r.points} pts
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {me && (
+              <div className="flex flex-col gap-2">
+                <p className="font-mono text-[12px] opacity-80">
+                  You're in as {me.name} with {SOURCE_LABEL[me.source]}.
+                </p>
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                  <button type="button" onClick={() => setEditing("picks")} className="press caps text-[13px] underline underline-offset-4 opacity-85 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-cream">
+                    Update my picks
+                  </button>
+                  <button type="button" onClick={() => setEditing("export")} className="press caps text-[13px] underline underline-offset-4 opacity-85 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-cream">
+                    Upload Spotify data
+                  </button>
+                  <button
+                    onClick={onLeave}
+                    className="press caps text-[13px] underline underline-offset-4 opacity-75 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-cream"
+                  >
+                    Leave room and delete my data
+                  </button>
+                </div>
+              </div>
+            )}
+            {editing && (
+              <div role="dialog" aria-label="Update your taste" className="fixed inset-0 z-40 flex items-end justify-center bg-ink/70 p-3 sm:items-center">
+                <div className="grain max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-[22px] bg-red p-6 text-cream">
+                  <p className="display mb-5 text-[32px]">Update your taste</p>
+                  <TasteBuilder
+                    kind={editing}
+                    onCancel={() => setEditing(null)}
+                    onDone={async (r) => {
+                      await onTaste(r.source, r.profile);
+                      if (me) savePass({ name: me.name, avatar: me.avatar, source: r.source, profile: r.profile, saved: Date.now(), through: r.through });
+                      setEditing(null);
+                    }}
+                  />
+                </div>
+              </div>
             )}
           </div>
 
@@ -361,303 +496,43 @@ function Lobby({
             {state.players.map((p, i) => (
               <li key={p.id} className="rise flex flex-col">
                 <Bubble side={i % 2 ? "right" : "left"} filled={i % 2 === 1}>
-                  &ldquo;{p.name} is in.&rdquo;
-                  <span className="mt-1 block font-mono text-[12px] normal-case tracking-[0.04em] opacity-75">
-                    {sourceLine(p)}
-                    {p.id === state.host_id ? " / host" : ""}
-                    {p.id === state.me ? " / you" : ""}
+                  <span className="flex items-center gap-4">
+                    <Avatar
+                      name={p.name}
+                      src={p.avatar}
+                      index={i}
+                      className="h-11 w-11 text-[22px] ring-2 ring-cream"
+                    />
+                    <span>
+                      &ldquo;{p.name} is in.&rdquo;
+                      <span className="mt-1 block font-mono text-[12px] normal-case tracking-[0.04em] opacity-75">
+                        {sourceLine(p)}
+                        {p.id === state.host_id ? " / host" : ""}
+                        {p.id === state.me ? " / you" : ""}
+                      </span>
+                    </span>
+                    {state.teams && p.team && (
+                      <span
+                        className={`caps rounded-full px-3 py-1 text-[12px] ${p.team === "red" ? "bg-red" : "bg-blue"}`}
+                      >
+                        Team {p.team}
+                      </span>
+                    )}
+                    {isHost && p.id !== state.me && (
+                      <button
+                        onClick={() => onKick(p.id)}
+                        aria-label={`Remove ${p.name}`}
+                        className="press ml-1 rounded-full px-2 font-mono text-[18px] leading-none opacity-60 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-cream"
+                      >
+                        &times;
+                      </button>
+                    )}
                   </span>
                 </Bubble>
               </li>
             ))}
           </ul>
         </div>
-      </Slide>
-    </Page>
-  );
-}
-
-/* ------------------------------------------------------------------ game */
-
-const STEPS: { id: string; label: string }[] = [
-  { id: "songs", label: "Top songs" },
-  { id: "artists", label: "Top artists" },
-  { id: "genre", label: "Top genre" },
-  { id: "report", label: "Report" },
-];
-
-function Game({
-  state,
-  isHost,
-  onAnswer,
-  onNext,
-}: {
-  state: RoomState;
-  isHost: boolean;
-  onAnswer: (id: string) => void;
-  onNext: () => void;
-}) {
-  const q = state.question;
-  const [picked, setPicked] = useState<string | null>(null);
-  const index = q?.index;
-  useEffect(() => setPicked(null), [index]);
-  if (!q) return null;
-
-  const reveal = state.phase === "reveal" ? state.reveal : undefined;
-  const locked = q.my_answer ?? null;
-  const selected = locked ?? picked;
-  const total = state.players.length;
-  const answered = state.players.filter((p) => p.answered).length;
-  const byId = Object.fromEntries(state.players.map((p) => [p.id, p]));
-  const last = q.index + 1 === q.total;
-
-  let cta: { label: string; onClick?: () => void; disabled?: boolean };
-  if (reveal) {
-    cta = isHost
-      ? { label: last ? "See the report" : "Next question", onClick: onNext }
-      : { label: "Host moves on", disabled: true };
-  } else if (q.about_me || locked) {
-    cta = isHost
-      ? { label: "Reveal now", onClick: onNext }
-      : { label: q.about_me ? "It's about you" : "Locked in", disabled: true };
-  } else {
-    cta = {
-      label: "Lock it in",
-      onClick: () => picked && onAnswer(picked),
-      disabled: !picked,
-    };
-  }
-
-  return (
-    <Page>
-      <Slide
-        tone="blue"
-        className="flex min-h-[calc(100dvh-24px)] items-center justify-center p-3 pb-20 sm:min-h-[calc(100dvh-48px)] sm:p-[4%] sm:pb-[6%] lg:px-[9%]"
-      >
-        <div className="grid w-full overflow-hidden rounded-[22px] bg-app text-paper lg:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="halftone flex flex-col gap-7 p-5 sm:p-9">
-            <progress
-              className="timer"
-              max={q.seconds}
-              value={reveal ? 0 : q.time_left}
-              aria-label={`${q.time_left} seconds left`}
-            />
-            <h2
-              key={q.index}
-              className="rise font-ui text-[clamp(30px,4.4vw,64px)] font-medium leading-[1.02] tracking-[-0.02em]"
-            >
-              {q.text}
-            </h2>
-
-            {q.about_me && !reveal && (
-              <p className="caps flex items-center gap-3 rounded-md bg-mustard px-4 py-3 text-[14px] text-ink">
-                <Star className="h-5 w-5 shrink-0" /> This one's about you. Keep
-                a straight face.
-              </p>
-            )}
-
-            <ul
-              className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3"
-              aria-label="Who is it?"
-            >
-              {state.players.map((p, i) => {
-                const right = reveal?.correct.includes(p.id);
-                const pickers = reveal
-                  ? Object.entries(reveal.picks)
-                      .filter(([, c]) => c === p.id)
-                      .map(([pid]) => byId[pid]?.name)
-                  : [];
-                const pts = reveal?.points[p.id];
-                const isSel = selected === p.id;
-                const disabled = !!reveal || !!locked || q.about_me;
-                const tone = reveal
-                  ? right
-                    ? "border-cream bg-cream text-app"
-                    : "border-line bg-tile text-paper/45"
-                  : isSel
-                    ? "border-paper bg-tile text-paper"
-                    : "border-line bg-tile text-paper hover:border-mute";
-                return (
-                  <li key={p.id}>
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => setPicked(p.id)}
-                      aria-pressed={isSel}
-                      className={`press flex h-full min-h-[132px] w-full flex-col justify-between rounded-[3px] border p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream disabled:cursor-default sm:min-h-[168px] sm:p-5 ${tone}`}
-                    >
-                      <span className="flex items-center justify-between font-mono text-[11px] tracking-[0.06em] sm:text-[12px]">
-                        {pad(i + 1)} / {pad(total)}
-                        {reveal && right && (
-                          <Star className="h-5 w-5 text-red" />
-                        )}
-                        {!reveal && p.answered && (
-                          <span className="opacity-70">in</span>
-                        )}
-                      </span>
-                      <span className="mt-4 font-ui text-[clamp(17px,1.8vw,24px)] font-medium uppercase tracking-[0.01em]">
-                        {p.name}
-                      </span>
-                      <span className="mt-3 font-mono text-[11px] leading-snug tracking-[0.02em] opacity-80 sm:text-[12px]">
-                        {reveal
-                          ? pickers.length
-                            ? `Picked by ${pickers.join(", ")}`
-                            : "Nobody picked"
-                          : `${p.score} pts / ${p.bot ? "demo friend" : p.source === "spotify" ? "spotify" : "sample"}`}
-                        {reveal && pts ? ` / +${pts}` : ""}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-
-            {reveal ? (
-              <p className="rise border-t border-line pt-4 font-mono text-[13px] leading-relaxed text-paper/90">
-                <span className="text-mute">WHY &nbsp;/&nbsp; </span>
-                {reveal.explain}
-              </p>
-            ) : (
-              <p className="mt-auto font-mono text-[12px] tracking-[0.06em] text-mute">
-                SELECTED &nbsp;/&nbsp;{" "}
-                <span className="text-paper">
-                  {selected ? byId[selected]?.name.toUpperCase() : "NOBODY YET"}
-                </span>
-              </p>
-            )}
-          </div>
-
-          <aside className="flex flex-col gap-8 border-t border-line bg-app p-6 lg:border-l lg:border-t-0">
-            <div>
-              <Wordmark stacked className="text-[36px] text-paper" />
-              <p className="mt-2 font-mono text-[11px] tracking-[0.06em] text-mute">
-                Room {state.code} &nbsp;/&nbsp; Q{pad(q.index + 1)}
-              </p>
-            </div>
-
-            <div>
-              <p className="font-mono text-[11px] tracking-[0.08em] text-mute">
-                WORKFLOW
-              </p>
-              <ol className="mt-4 flex flex-col gap-1 font-mono text-[13px]">
-                {STEPS.map((s, i) => (
-                  <li
-                    key={s.id}
-                    className={`rounded-[3px] border px-4 py-3 ${s.id === q.category ? "border-mute bg-tile text-paper" : "border-transparent text-paper/70"}`}
-                  >
-                    {pad(i + 1)} &nbsp; {s.label}
-                  </li>
-                ))}
-              </ol>
-            </div>
-
-            <div>
-              <p className="font-mono text-[11px] tracking-[0.08em] text-mute">
-                CURRENT SESSION
-              </p>
-              <p className="mt-3 font-mono text-[13px] text-paper">
-                Q {q.index + 1} OF {q.total} &nbsp;/&nbsp;{" "}
-                {reveal ? "REVEALED" : `${q.time_left}S`}
-              </p>
-              <p className="mt-1 font-mono text-[12px] text-mute">
-                {answered} of {total - 1} answered
-              </p>
-            </div>
-
-            <Button
-              variant="dark"
-              onClick={cta.onClick}
-              disabled={cta.disabled}
-              className="mt-auto hidden lg:inline-flex min-h-14 w-full justify-start px-5"
-            >
-              {cta.label.toUpperCase()} <span aria-hidden>&rarr;</span>
-            </Button>
-          </aside>
-        </div>
-      </Slide>
-      <div className="pointer-events-none fixed inset-x-3 bottom-3 z-30 lg:hidden">
-        <Button onClick={cta.onClick} disabled={cta.disabled} className="pointer-events-auto min-h-14 w-full disabled:opacity-100 disabled:bg-tile disabled:text-paper/70">
-          {cta.label} <span aria-hidden>&rarr;</span>
-        </Button>
-      </div>
-    </Page>
-  );
-}
-
-/* ---------------------------------------------------------------- report */
-
-const STRAP = { red: "bg-red", mustard: "bg-mustard", green: "bg-green", blue: "bg-blue" } as const;
-// Each badge hangs at its own height, like the deck's game-cards slide.
-const DROP = ["h-40 sm:h-[260px]", "h-24 sm:h-[150px]", "h-44 sm:h-[280px]", "h-32 sm:h-[210px]"];
-const DELAY = ["[animation-delay:0ms]", "[animation-delay:70ms]", "[animation-delay:140ms]", "[animation-delay:210ms]"];
-
-function Report({ state, isHost, onRematch }: { state: RoomState; isHost: boolean; onRematch: () => void }) {
-  const ranked = [...state.players].sort((a, b) => b.score - a.score);
-  const host = state.players.find((p) => p.id === state.host_id);
-  const cards = state.cards ?? [];
-
-  return (
-    <Page>
-      <section className="relative -mt-3 overflow-hidden pb-4 sm:-mt-6 lg:-mt-8">
-        <div className="grain absolute inset-x-0 top-[18%] h-[52%] rounded-[22px] bg-paper sm:rounded-[28px]" />
-        <ul className="relative grid grid-cols-2 gap-x-5 px-3 sm:grid-cols-4 sm:gap-x-10 sm:px-[12%]">
-          {cards.map((c, i) => (
-            <li key={c.id} className={`swing flex flex-col items-center ${DELAY[i % 4]}`}>
-              <div className={`grain w-7 sm:w-9 ${STRAP[c.color]} ${DROP[i % 4]}`} />
-              <div className={`grain relative -mt-[16%] flex aspect-[3/4.2] w-full skew-y-[18deg] flex-col items-center justify-center px-3 ${STRAP[c.color]}`}>
-                <span className="absolute left-[34%] top-[8%] h-[4.5%] w-[32%] rotate-[4deg] rounded-full bg-paper/80" />
-                <div className="flex -skew-y-[18deg] flex-col items-center gap-2 pt-[18%] text-center text-paper">
-                  <span className="font-display text-[clamp(11px,1.25vw,19px)] font-black uppercase leading-tight">{c.title}</span>
-                  <span className="font-cond text-[clamp(30px,3.6vw,56px)] uppercase leading-none">{c.winner}</span>
-                  <span className="caps text-[clamp(10px,0.9vw,13px)] leading-snug opacity-90">{c.stat}</span>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-        <p className="display relative -mt-[0.25em] text-center text-[clamp(56px,10vw,170px)] text-paper">Game cards</p>
-      </section>
-
-      <section className="grain rounded-[22px] bg-ink px-6 py-14 ring-1 ring-cream/10 sm:rounded-[28px] sm:px-[8%] sm:py-20">
-        <div className="grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-center">
-          <div className="relative">
-            <Star className="absolute -left-6 -top-10 h-40 w-40 text-red sm:h-56 sm:w-56" />
-            <h2 className="display relative text-[clamp(56px,6.2vw,112px)] text-paper">
-              Final
-              <br />
-              scores
-            </h2>
-            <p className="caps relative mt-6 inline-block bg-blue px-6 py-4 text-[clamp(18px,2vw,30px)] leading-tight">Who knows the group best?</p>
-          </div>
-          <ol className="flex flex-col">
-            {ranked.map((p, i) => (
-              <li key={p.id} className="flex items-center gap-5 border-b-[3px] border-blue py-5 last:border-b-0">
-                <Arrow flip className="h-8 w-14 shrink-0 text-leaf sm:h-10 sm:w-16" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-cond text-[clamp(36px,4.4vw,64px)] uppercase leading-none text-paper">{p.name}</p>
-                  <p className="mt-1 text-[clamp(15px,1.4vw,20px)] text-paper/80">
-                    {i === 0 ? "Knows everyone's taste" : p.id === state.me ? "That's you" : `${pad(i + 1)} place`}
-                  </p>
-                </div>
-                <p className="font-cond text-[clamp(32px,3.6vw,56px)] leading-none text-cream">{p.score}</p>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <Slide tone="mustard" className="flex min-h-[60dvh] flex-col items-center justify-center gap-8 px-6 py-20 text-center">
-        <p className="display text-[clamp(20px,2.6vw,40px)]">Connect. Guess. Reveal. Rematch.</p>
-        {isHost ? (
-          <Button tone="ink" onClick={onRematch} className="min-h-14 px-10 text-[17px]">
-            Rematch
-          </Button>
-        ) : (
-          <p className="caps text-[18px]">Waiting on {host?.name ?? "the host"} for the rematch.</p>
-        )}
-        <button onClick={() => go("/")} className="press caps text-[14px] underline underline-offset-4 hover:opacity-70 focus-visible:outline-2 focus-visible:outline-ink">
-          New room
-        </button>
       </Slide>
     </Page>
   );

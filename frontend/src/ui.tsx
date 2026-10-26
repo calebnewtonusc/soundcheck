@@ -203,3 +203,23 @@ export function Toast({
     </div>
   );
 }
+
+/** A player's face: their Spotify photo, or their initial on a deck color. */
+const AVATAR_TONES = ["bg-red", "bg-mustard", "bg-green", "bg-blue"];
+export function Avatar({ name, src, index = 0, className = "" }: { name: string; src: string | null; index?: number; className?: string }) {
+  if (src) return <img src={src} alt="" className={`shrink-0 rounded-full object-cover ${className}`} />;
+  return (
+    <span aria-hidden className={`grain inline-flex shrink-0 items-center justify-center rounded-full font-cond leading-none text-paper ${AVATAR_TONES[index % 4]} ${className}`}>
+      {name.slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
+
+/** Album or artist art in the deck's cream photo mat. */
+export function Art({ src, alt, className = "", round = false }: { src: string | null; alt: string; className?: string; round?: boolean }) {
+  return (
+    <div className={`shrink-0 overflow-hidden bg-tile ${round ? "rounded-full" : "rounded-[3px]"} ${className}`}>
+      {src ? <img src={src} alt={alt} className="h-full w-full object-cover" /> : <Star className="m-[22%] h-[56%] w-[56%] text-line" />}
+    </div>
+  );
+}
