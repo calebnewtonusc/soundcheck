@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Admin } from "./Admin";
+import { Privacy } from "./Privacy";
 import { api } from "./api";
 import { Room } from "./Room";
 import { Arrow, Button, Page, Slide, Star, Toast, Wordmark } from "./ui";
@@ -22,24 +23,31 @@ export function go(path: string) {
 export default function App() {
   const path = useRoute();
   if (path === "/admin") return <Admin />;
+  if (path === "/privacy") return <Privacy />;
   const match = path.match(/^\/room\/([A-Za-z]{4})\/?$/);
   if (match) return <Room code={match[1].toUpperCase()} />;
   return <Home />;
 }
 
-function SpotifyLockup() {
+function Kicker() {
+  return <p className="caps text-[clamp(14px,1.6vw,22px)] tracking-[0.12em] opacity-85">The friend quiz for Spotify listeners</p>;
+}
+
+/** Shown on every public page: honest about who made this and where data comes from. */
+export function Footer() {
   return (
-    <div className="flex items-center justify-center gap-3 text-[clamp(26px,3.6vw,52px)] font-bold tracking-tight">
-      <svg viewBox="0 0 100 100" aria-hidden className="h-[1.5em] w-[1.5em]">
-        <circle cx="50" cy="50" r="50" fill="currentColor" />
-        <g fill="none" className="stroke-blue" strokeLinecap="round">
-          <path d="M24 38c18-6 38-5 54 4" strokeWidth="8" />
-          <path d="M27 54c15-4 31-3 44 4" strokeWidth="7" />
-          <path d="M30 68c12-3 24-2 34 3" strokeWidth="6" />
-        </g>
-      </svg>
-      <span className="font-body">Spotify</span>
-    </div>
+    <footer className="flex flex-col items-center gap-2 px-6 pb-8 pt-2 text-center font-mono text-[12px] leading-relaxed text-cream/60">
+      <p>SoundCheck isn't made by or affiliated with Spotify. Music data comes from Spotify and stats.fm.</p>
+      <p>
+        <a href="/privacy" className="underline underline-offset-4 hover:text-cream focus-visible:outline-2 focus-visible:outline-cream">
+          Privacy and terms
+        </a>
+        {" / "}
+        <a href="https://github.com/calebnewtonusc/soundcheck" target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-cream focus-visible:outline-2 focus-visible:outline-cream">
+          Source
+        </a>
+      </p>
+    </footer>
   );
 }
 
@@ -77,7 +85,7 @@ function Home() {
         className="flex min-h-[calc(100dvh-24px)] flex-col items-center justify-center px-5 py-20 text-center sm:min-h-[calc(100dvh-48px)] lg:min-h-[calc(100dvh-64px)]"
       >
         <div className="rise flex flex-col items-center">
-          <SpotifyLockup />
+          <Kicker />
           <Wordmark className="mt-1 text-[clamp(30px,8.4vw,150px)]" />
           <p className="caps mt-5 max-w-[24ch] text-[clamp(17px,2.5vw,40px)] leading-[1.12]">
             Your friends. Their music. One very competitive quiz.
@@ -154,6 +162,7 @@ function Home() {
           </Button>
         </div>
       </Slide>
+      <Footer />
     </Page>
   );
 }

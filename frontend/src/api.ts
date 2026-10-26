@@ -4,7 +4,7 @@ export type Player = {
   id: string;
   name: string;
   score: number;
-  source: "spotify" | "sample" | "picks" | "export";
+  source: "spotify" | "sample" | "picks" | "export" | "statsfm";
   bot: boolean;
   avatar: string | null;
   streak: number;
@@ -110,6 +110,8 @@ const post = <T>(path: string, body: unknown) =>
 export type Season = { games: number; table: { id: string; name: string; wins: number; points: number; here: boolean }[] };
 
 export const api = {
+  joinStatsfm: (code: string, name: string, handle: string) =>
+    post<Creds & { name: string; avatar: string | null; profile: Profile; handle: string }>(`/api/rooms/${code}/join-statsfm`, { name, handle }),
   joinProfile: (code: string, name: string, source: Source, profile: Profile, avatar: string | null = null) =>
     post<Creds>(`/api/rooms/${code}/join-profile`, { name, source, profile, avatar }),
   updateProfile: (code: string, c: Creds, source: Source, profile: Profile) => post<RoomState>(`/api/rooms/${code}/profile`, { ...c, source, profile }),

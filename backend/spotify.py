@@ -224,3 +224,24 @@ async def search(q: str, kind: str) -> list[dict]:
     if kind == "artist":
         return [_artist(a) for a in items if a]
     return [_track(t) for t in items if t]
+
+
+async def add_years(profile: dict, limit: int = 10) -> None:
+    """Fill release years on the tracks decade questions use, via catalog search."""
+    if not search_configured():
+        return
+    seen: dict[tuple[str, str], int | None] = {}
+    for key in ("top_tracks_short", "top_tracks_long"):
+        for t in profile.get(key, [])[:limit]:
+            k = (t["name"], t["artist"])
+            if t.get("year") or k in seen:
+                continue
+            try:
+                hits = await search(f"track:{t['name']} artist:{t['artist']}", "track")
+            except (SpotifyError, httpx.HTTPError):
+                hits = []
+            seen[k] = hits[0]["year"] if hits else None
+    for key in ("top_tracks_short", "top_tracks_long", "recent"):
+        for t in profile.get(key, []):
+            if not t.get("year"):
+                t["year"] = seen.get((t["name"], t["artist"]))

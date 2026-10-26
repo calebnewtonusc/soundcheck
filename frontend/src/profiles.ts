@@ -16,7 +16,7 @@ export type Profile = {
   recent: Track[];
   self_reported?: boolean;
 };
-export type Source = "picks" | "export" | "spotify" | "sample";
+export type Source = "picks" | "export" | "spotify" | "sample" | "statsfm";
 
 /** What a phone keeps between games so the next room is one tap. */
 export type Pass = {
@@ -26,6 +26,8 @@ export type Pass = {
   profile: Profile;
   saved: number;
   through?: string;
+  // stats.fm passes rejoin by username, so every game pulls fresh plays.
+  handle?: string;
 };
 
 const PASS_KEY = "soundcheck:pass";

@@ -34,7 +34,7 @@ def _load_env() -> None:
 
 _load_env()
 
-from . import ai, spotify, store  # noqa: E402
+from . import ai, spotify, statsfm, store  # noqa: E402
 from .game import Room, new_code  # noqa: E402
 from .samples import SAMPLES, sample_profile  # noqa: E402
 
@@ -174,19 +174,19 @@ class Profile(BaseModel):
 
 class JoinProfile(BaseModel):
     name: str = Field(max_length=40)
-    source: str = Field(pattern="^(picks|export|spotify|sample)$")
+    source: str = Field(pattern="^(picks|export|spotify|sample|statsfm)$")
     avatar: str | None = Field(default=None, max_length=300)
     profile: Profile
 
 
 class UpdateProfile(Who):
-    source: str = Field(pattern="^(picks|export|spotify|sample)$")
+    source: str = Field(pattern="^(picks|export|spotify|sample|statsfm)$")
     profile: Profile
 
 
-# Only Spotify's image CDN: a profile is user-supplied, and every phone in the
+# Only known music CDNs: a profile is user-supplied, and every phone in the
 # room loads these URLs.
-IMAGE_HOST = "https://i.scdn.co/"
+IMAGE_HOST = statsfm.IMAGE_HOSTS
 
 
 def _clean(profile: Profile) -> dict:
@@ -244,7 +244,7 @@ async def spotify_access(request: Request, body: AccessRequest):
     now = time.time()
     while hits and now - hits[0] > 3600:
         hits.popleft()
-    if len(hits) >= 5:
+    if len(hits) >= 20:
         raise HTTPException(429, "Already sent. Hang tight.")
     hits.append(now)
     if await _spots_left() <= 0:
@@ -328,19 +328,22 @@ def create_room(request: Request):
 
 @app.get("/api/rooms/{code}")
 def get_room(request: Request, code: str, pid: str = "", key: str = ""):
-    hits = lookups[_ip(request)]
     now = time.time()
+    room = rooms.get(code.upper())
+    p = room.players.get(pid) if room else None
+    if room and p and secrets.compare_digest(p.key, key):
+        # Members are never limited: a room of friends on one dorm WiFi
+        # shares an IP and polls once a second each (load test, 2026-10-26:
+        # 100 players from one address hit the old per-IP cap in a minute).
+        room.touched = now
+        return room.view(pid)
+    hits = lookups[_ip(request)]
     while hits and now - hits[0] > 60:
         hits.popleft()
     if len(hits) >= LOOKUP_LIMIT:
         raise HTTPException(429, "Slow down a sec.")
     hits.append(now)
-    room = _room(code, touch=False)
-    p = room.players.get(pid)
-    if p and secrets.compare_digest(p.key, key):
-        room.touched = now
-        return room.view(pid)
-    return room.public_view()
+    return _room(code, touch=False).public_view()
 
 
 def _act(room: Room, fn, pid: str):
@@ -381,6 +384,42 @@ def join_profile(code: str, body: JoinProfile, background: BackgroundTasks):
     return {"pid": p.id, "key": p.key}
 
 
+class JoinStats(BaseModel):
+    name: str = Field(default="", max_length=40)
+    handle: str = Field(min_length=2, max_length=200)
+
+
+stats_lookups: dict[str, deque] = defaultdict(deque)
+
+
+@app.post("/api/rooms/{code}/join-statsfm")
+async def join_statsfm(request: Request, code: str, body: JoinStats):
+    room = _room(code)
+    handle = statsfm.handle_from(body.handle)
+    if not handle:
+        raise HTTPException(400, "Paste your stats.fm profile link or username.")
+    hits = stats_lookups[_ip(request)]
+    now = time.time()
+    while hits and now - hits[0] > 60:
+        hits.popleft()
+    # A room on one WiFi connecting together: 30 a minute per IP.
+    if len(hits) >= 30:
+        raise HTTPException(429, "Give it a minute and try again.")
+    hits.append(now)
+    try:
+        display, avatar, profile = await statsfm.fetch(handle)
+    except statsfm.StatsError as e:
+        raise HTTPException(400, str(e))
+    except httpx.HTTPError:
+        raise HTTPException(502, "stats.fm didn't answer. Try again in a sec.")
+    await spotify.add_years(profile)
+    try:
+        p = room.add_player(body.name.strip() or display, profile, "statsfm", avatar=avatar)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"pid": p.id, "key": p.key, "name": p.name, "avatar": avatar, "profile": profile, "handle": handle}
+
+
 @app.post("/api/rooms/{code}/profile")
 def update_profile(code: str, body: UpdateProfile, background: BackgroundTasks):
     room = _room(code)
@@ -404,8 +443,9 @@ def my_profile(code: str, body: Who):
 
 
 searches: dict[str, deque] = defaultdict(deque)
-# 60 a minute per IP covers someone typing fast through ten picks.
-SEARCH_LIMIT = 60
+# Per IP, and a whole room on one WiFi shares an IP: 12 friends each typing
+# through ten picks at once is about 300 searches a minute.
+SEARCH_LIMIT = 300
 
 
 @app.get("/api/search")

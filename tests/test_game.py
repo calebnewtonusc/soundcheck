@@ -167,7 +167,7 @@ def test_quick_picks_skip_time_window_questions():
     for seed in range(15):
         for q in build_questions(ps, names, n=12, rng=random.Random(seed)):
             if "p0" in q.subjects:
-                assert not any(w in q.text for w in ("past year", "all year", "whole year", "brand new")), q.text
+                assert not any(w in q.text for w in ("all time", "all-time", "brand new")), q.text
 
 
 def test_season_and_fresh_questions_across_rematches():
@@ -199,3 +199,12 @@ def test_strangers_see_only_the_join_screen():
     pub = room.public_view()
     assert "question" not in pub and "reveal" not in pub
     assert all(p["score"] == 0 for p in pub["players"])
+
+
+def test_statsfm_handles():
+    from backend.statsfm import handle_from
+    assert handle_from("https://stats.fm/user/sjoerd?ref=x") == "sjoerd"
+    assert handle_from("stats.fm/caleb.n") == "caleb.n"
+    assert handle_from("@caleb_n") == "caleb_n"
+    assert handle_from("not a handle!") is None
+    assert handle_from("<script>") is None

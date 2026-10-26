@@ -186,9 +186,9 @@ def _who(pid: str, name: str, s: dict, st: dict[str, dict]) -> list[tuple[str, s
                     f"{name}'s most played track of the last 4 weeks.", t.get("image")))
     if s["song_of_year"] and (not s["top_song"] or _key(s["song_of_year"]) != _key(s["top_song"])):
         t = s["song_of_year"]
-        out.append(("songs", f"Whose most played song of the past year is {q}{t['name']}{e}?",
+        out.append(("songs", f"Whose most played song of all time is {q}{t['name']}{e}?",
                     lambda x, t=t: x["song_of_year"] is not None and _key(x["song_of_year"]) == _key(t),
-                    f"{t['name']} by {t['artist']} is {name}'s #1 over the last 12 months.", t.get("image")))
+                    f"{t['name']} by {t['artist']} is {name}'s all-time #1.", t.get("image")))
     if s["loop_track"] and s["loop_count"] >= 3:
         t, n = s["loop_track"], s["loop_count"]
         out.append(("songs", f"Who played {q}{t['name']}{e} {n} times in their last {s['recent_total']} plays?",
@@ -196,14 +196,14 @@ def _who(pid: str, name: str, s: dict, st: dict[str, dict]) -> list[tuple[str, s
                     f"{name} has it on repeat: {n} of their last {s['recent_total']} plays.", t.get("image")))
     if s["stayer"] and s["top_song"] and _key(s["stayer"]) != _key(s["top_song"]):
         t = s["stayer"]
-        out.append(("songs", f"Who still has {q}{t['name']}{e} in their top 10, a whole year later?",
+        out.append(("songs", f"Whose all-time favorite {q}{t['name']}{e} is still in their top 10 this month?",
                     lambda x, t=t: _key(t) in x["track_keys"],
                     f"{t['name']} is in {name}'s top 10 for the month and for the year.", t.get("image")))
     if s["top_artist_year"]:
         a = s["top_artist_year"]
-        out.append(("artists", f"Who's had {a['name']} as their #1 artist all year?",
+        out.append(("artists", f"Whose #1 artist of all time is {a['name']}?",
                     lambda x, a=a: x["top_artist_year"] is not None and x["top_artist_year"]["name"] == a["name"],
-                    f"{a['name']} tops {name}'s last 12 months.", a.get("image")))
+                    f"{a['name']} is {name}'s all-time #1 artist.", a.get("image")))
     others = [o for opid, o in st.items() if opid != pid]
     unique = [a for a in s["top10_long"] if all(a not in o["artist_names"] for o in others)]
     if unique:
@@ -396,7 +396,7 @@ def _eras(st: dict[str, dict], names: dict[str, str], rng: random.Random) -> lis
 
 
 ROADTRIP_HINTS = ("this month", "last song", "times in their last", " AM?", "brand new", "top 5")
-WRAPPED_HINTS = ("past year", "all year", "whole year", "only one here", "top genre", "both have", "biggest")
+WRAPPED_HINTS = ("all time", "all-time", "only one here", "top genre", "both have", "biggest")
 GENRE_HINTS = ("genre", "only one here", "both have", "biggest", "loyal")
 
 

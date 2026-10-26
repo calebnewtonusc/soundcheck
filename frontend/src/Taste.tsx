@@ -396,3 +396,83 @@ function Upload({
     </div>
   );
 }
+
+const STATS_LOGIN = "https://stats.fm/login?redirect=%2Fsettings%2Fprofile";
+
+/** Connect Spotify through stats.fm: sign in there once, paste the username back. */
+export function StatsConnect({ onConnect, onCancel, busy }: { onConnect: (handle: string) => Promise<void>; onCancel: () => void; busy: boolean }) {
+  const [handle, setHandle] = useState("");
+  const [opened, setOpened] = useState(false);
+  const [canPaste] = useState(() => typeof navigator !== "undefined" && !!navigator.clipboard?.readText);
+
+  async function paste() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) setHandle(text.trim().slice(0, 200));
+    } catch {
+      // Paste permission refused: they can long-press the box instead.
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <ol className="flex flex-col gap-4 text-[15px] leading-snug">
+        <li className="flex gap-3">
+          <span className="font-cond text-[22px] leading-none">1</span>
+          <div className="flex flex-1 flex-col gap-2">
+            <span>Sign in to stats.fm with your Spotify. It's free and takes about a minute.</span>
+            <a
+              href={STATS_LOGIN}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setOpened(true)}
+              className="press caps inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-cream px-6 text-[14px] text-ink hover:bg-paper focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cream"
+            >
+              {opened ? "Open stats.fm again" : "Open stats.fm"} <span aria-hidden>{"\u2197"}</span>
+            </a>
+          </div>
+        </li>
+        <li className="flex gap-3">
+          <span className="font-cond text-[22px] leading-none">2</span>
+          <span>It lands on your profile settings. Copy the username there and come back.</span>
+        </li>
+        <li className="flex gap-3">
+          <span className="font-cond text-[22px] leading-none">3</span>
+          <div className="flex flex-1 flex-col gap-2">
+            <label htmlFor="statsfm" className="sr-only">
+              stats.fm username or profile link
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="statsfm"
+                value={handle}
+                onChange={(e) => setHandle(e.target.value.slice(0, 200))}
+                placeholder="stats.fm username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                className="min-w-0 flex-1 rounded-md border-2 border-cream/60 bg-transparent px-4 py-3 text-[16px] text-cream placeholder:text-cream/50 focus-visible:border-cream focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-cream/40"
+              />
+              {canPaste && (
+                <button
+                  type="button"
+                  onClick={paste}
+                  className="press caps rounded-md border-2 border-cream/60 px-4 text-[13px] hover:border-cream focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream"
+                >
+                  Paste
+                </button>
+              )}
+            </div>
+            <Button type="button" disabled={handle.trim().length < 2 || busy} onClick={() => onConnect(handle.trim())}>
+              {busy ? <Star className="spin-slow h-5 w-5" /> : null}
+              {busy ? "Pulling your music" : "Connect"}
+            </Button>
+          </div>
+        </li>
+      </ol>
+      <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>
+        Back
+      </Button>
+    </div>
+  );
+}

@@ -9,7 +9,7 @@ import {
   type Profile,
   type Source,
 } from "./profiles";
-import { TasteBuilder } from "./Taste";
+import { StatsConnect, TasteBuilder } from "./Taste";
 import { Avatar, Button, Page, Slide, Star, Wordmark } from "./ui";
 
 const READS = [
@@ -34,6 +34,7 @@ export const SOURCE_LABEL: Record<Source, string> = {
   export: "Spotify data upload",
   spotify: "Spotify login",
   sample: "Sample listener",
+  statsfm: "Spotify via stats.fm",
 };
 
 type JoinProps = {
@@ -50,7 +51,7 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
   const [busy, setBusy] = useState(false);
   const [recent, setRecent] = useState(true);
   const [health, setHealth] = useState({ spotify: false, search: true, spotsLeft: 0 });
-  const [builder, setBuilder] = useState<"picks" | "export" | null>(null);
+  const [builder, setBuilder] = useState<"picks" | "export" | "statsfm" | null>(null);
   const [showSpotify, setShowSpotify] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -91,6 +92,18 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
       onJoined(c);
     } catch (e) {
       onError(e instanceof Error ? e.message : "Couldn't join.");
+      setBusy(false);
+    }
+  }
+
+  async function joinStats(handle: string, who = name.trim()) {
+    setBusy(true);
+    try {
+      const r = await api.joinStatsfm(code, who, handle);
+      savePass({ name: r.name, avatar: r.avatar, source: "statsfm", profile: r.profile, saved: Date.now(), handle: r.handle });
+      onJoined({ pid: r.pid, key: r.key });
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Couldn't connect.");
       setBusy(false);
     }
   }
@@ -199,13 +212,9 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
                   type="button"
                   disabled={busy}
                   onClick={() =>
-                    joinWith(
-                      pass.source,
-                      pass.profile,
-                      pass.through,
-                      pass.avatar,
-                      pass.name,
-                    )
+                    pass.source === "statsfm" && pass.handle
+                      ? joinStats(pass.handle, pass.name)
+                      : joinWith(pass.source, pass.profile, pass.through, pass.avatar, pass.name)
                   }
                 >
                   {busy ? "Joining" : `Join as ${pass.name}`}
@@ -251,7 +260,9 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
                   2 &nbsp;Bring your taste
                 </span>
 
-                {builder ? (
+                {builder === "statsfm" ? (
+                  <StatsConnect busy={busy} onCancel={() => setBuilder(null)} onConnect={(h) => joinStats(h)} />
+                ) : builder ? (
                   <TasteBuilder
                     kind={builder}
                     onCancel={() => setBuilder(null)}
@@ -259,13 +270,19 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
                   />
                 ) : (
                   <div className="flex flex-col gap-3">
+                    <SourceButton
+                      disabled={!named || busy}
+                      onClick={() => setBuilder("statsfm")}
+                      title="Connect Spotify"
+                      line="Through stats.fm, free. About a minute the first time, one tap after."
+                      primary
+                    />
                     {health.search && (
                       <SourceButton
                         disabled={!named || busy}
                         onClick={() => setBuilder("picks")}
                         title="Quick picks"
-                        line="Search and pick your top artists and songs. About a minute."
-                        primary
+                        line="No account needed. Search and pick your top artists and songs."
                       />
                     )}
                     {health.search && (
@@ -277,16 +294,14 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
                       />
                     )}
                     {health.spotify && (
-                      <SourceButton
+                      <button
+                        type="button"
                         disabled={!named || busy}
                         onClick={() => setShowSpotify(!showSpotify)}
-                        title="Sign in with Spotify"
-                        line={
-                          health.spotsLeft > 0
-                            ? `For friends on the SoundCheck Spotify list. ${health.spotsLeft} ${health.spotsLeft === 1 ? "spot" : "spots"} left.`
-                            : "For friends already on the SoundCheck Spotify list."
-                        }
-                      />
+                        className="press caps self-start text-[13px] underline underline-offset-4 opacity-80 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-cream disabled:opacity-40"
+                      >
+                        On the SoundCheck Spotify list? Sign in directly
+                      </button>
                     )}
                     {showSpotify && health.spotify && (
                       <div className="rounded-md border-2 border-cream/40 p-4">
