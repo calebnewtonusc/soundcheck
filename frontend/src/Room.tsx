@@ -84,6 +84,12 @@ export function Room({ code }: { code: string }) {
     return () => window.clearInterval(t);
   }, [refresh]);
 
+  // Every new screen (next question, reveal into report) starts at the top.
+  const screen = state ? `${state.phase}:${state.question?.index ?? ""}` : "";
+  useEffect(() => {
+    if (screen) window.scrollTo({ top: 0 });
+  }, [screen]);
+
   const act = async (fn: () => Promise<RoomState>) => {
     try {
       setState(await fn());
