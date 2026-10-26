@@ -41,7 +41,7 @@ export function Report({ state, isHost, onRematch }: Props) {
     <Page>
       <section className="relative -mt-3 overflow-hidden pb-4 sm:-mt-6 lg:-mt-8">
         <div className="grain absolute inset-x-0 top-[18%] h-[52%] rounded-[22px] bg-paper sm:rounded-[28px]" />
-        <ul className="relative grid grid-cols-2 gap-x-5 px-3 sm:grid-cols-4 sm:gap-x-10 sm:px-[12%]">
+        <ul className="relative mx-auto grid w-full max-w-5xl grid-cols-2 gap-x-5 gap-y-6 px-3 sm:grid-cols-4 sm:gap-x-8 sm:px-6">
           {cards.map((c, i) => (
             <li
               key={c.id}
@@ -54,7 +54,7 @@ export function Report({ state, isHost, onRematch }: Props) {
             </li>
           ))}
         </ul>
-        <p className="display relative -mt-[0.25em] text-center text-[clamp(56px,10vw,170px)] text-paper">
+        <p className="display relative mt-6 text-center text-[clamp(44px,9vw,140px)] sm:whitespace-nowrap text-paper">
           Game cards
         </p>
       </section>

@@ -79,7 +79,7 @@ export function Game({ state, isHost, onAnswer, onNext, onReact }: Props) {
     <Page>
       <Slide
         tone="blue"
-        className="flex min-h-[calc(100dvh-24px)] items-center justify-center p-3 pb-24 sm:min-h-[calc(100dvh-48px)] sm:p-[3.5%] lg:px-[6%] lg:pb-[3.5%]"
+        className="flex min-h-[calc(100dvh-24px)] items-center justify-center p-3 pb-32 sm:min-h-[calc(100dvh-48px)] sm:p-[3.5%] lg:px-[6%] lg:pb-[3.5%]"
       >
         <div className="grid w-full overflow-hidden rounded-[22px] bg-app text-paper lg:grid-cols-[minmax(0,1fr)_290px]">
           <div className="halftone flex flex-col gap-6 p-5 sm:gap-7 sm:p-9">

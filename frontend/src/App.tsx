@@ -86,7 +86,7 @@ function Home() {
       >
         <div className="rise flex flex-col items-center">
           <Kicker />
-          <Wordmark className="mt-1 text-[clamp(30px,8.4vw,150px)]" />
+          <Wordmark className="mt-1 text-[clamp(30px,7.4vw,124px)]" />
           <p className="caps mt-5 max-w-[24ch] text-[clamp(17px,2.5vw,40px)] leading-[1.12]">
             Your friends. Their music. One very competitive quiz.
           </p>

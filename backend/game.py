@@ -198,7 +198,7 @@ def _who(pid: str, name: str, s: dict, st: dict[str, dict]) -> list[tuple[str, s
         t = s["stayer"]
         out.append(("songs", f"Whose all-time favorite {q}{t['name']}{e} is still in their top 10 this month?",
                     lambda x, t=t: _key(t) in x["track_keys"],
-                    f"{t['name']} is in {name}'s top 10 for the month and for the year.", t.get("image")))
+                    f"{t['name']} is in {name}'s top 10 this month and of all time.", t.get("image")))
     if s["top_artist_year"]:
         a = s["top_artist_year"]
         out.append(("artists", f"Whose #1 artist of all time is {a['name']}?",

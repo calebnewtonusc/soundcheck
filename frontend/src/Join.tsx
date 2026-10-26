@@ -66,6 +66,17 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
 
   const started = state.phase !== "lobby";
   const named = name.trim().length > 0;
+  const [nudge, setNudge] = useState(false);
+
+  function needName(then: () => void) {
+    if (named) {
+      setNudge(false);
+      then();
+      return;
+    }
+    setNudge(true);
+    inputRef.current?.focus();
+  }
 
   async function joinWith(
     source: Source,
@@ -132,12 +143,11 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
         tone="red"
         className="flex min-h-[calc(100dvh-24px)] flex-col justify-center px-6 py-16 sm:min-h-[calc(100dvh-48px)] sm:px-[10%]"
       >
-        <div className="rise flex flex-col gap-10 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
-          <div className="min-w-0 lg:pt-24">
-            <p className="caps text-[clamp(14px,1.5vw,20px)] opacity-80">
-              Room
-            </p>
-            <p className="display text-[clamp(64px,9vw,150px)] tracking-[0.04em]">
+        <div className="rise mx-auto flex w-full max-w-lg flex-col gap-8">
+          <Wordmark stacked className="text-[clamp(40px,5vw,64px)]" />
+          <div className="min-w-0 border-y-2 border-cream/30 py-5">
+            <p className="caps text-[14px] opacity-80">You're joining room</p>
+            <p className="display text-[clamp(56px,8vw,96px)] tracking-[0.04em]">
               {code}
             </p>
             {state.players.length > 0 ? (
@@ -175,9 +185,8 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
 
           <form
             onSubmit={spotify}
-            className="flex w-full min-w-0 max-w-lg flex-col gap-6 lg:shrink-0"
+            className="flex w-full min-w-0 flex-col gap-6"
           >
-            <Wordmark stacked className="text-[clamp(44px,5vw,76px)]" />
             {blocked !== null && <RequestAccess code={code} name={blocked || name} />}
 
             {started ? (
@@ -253,8 +262,10 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
                     placeholder="YOUR NAME"
                     autoComplete="given-name"
                     enterKeyHint="next"
-                    className="caps rounded-sm border-b-[3px] border-cream/70 bg-transparent pb-2 text-[clamp(26px,3vw,40px)] text-cream placeholder:text-cream/40 focus-visible:border-cream focus-visible:outline-1 focus-visible:outline-offset-8 focus-visible:outline-cream/40"
+                    aria-invalid={nudge && !named}
+                    className={`caps border-b-[3px] bg-transparent pb-2 text-[clamp(26px,3vw,40px)] text-cream outline-none placeholder:text-cream/40 focus:border-cream ${nudge && !named ? "border-mustard" : "border-cream/60"}`}
                   />
+                  {nudge && !named && <span className="text-[13px] normal-case text-mustard">Add your name first, then pick how to bring your music.</span>}
                 </label>
                 <span className="caps -mb-3 text-[14px] opacity-80">
                   2 &nbsp;Bring your taste
@@ -271,24 +282,24 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
                 ) : (
                   <div className="flex flex-col gap-3">
                     <SourceButton
-                      disabled={!named || busy}
-                      onClick={() => setBuilder("statsfm")}
+                      disabled={busy}
+                      onClick={() => needName(() => setBuilder("statsfm"))}
                       title="Connect Spotify"
                       line="Through stats.fm, free. About a minute the first time, one tap after."
                       primary
                     />
                     {health.search && (
                       <SourceButton
-                        disabled={!named || busy}
-                        onClick={() => setBuilder("picks")}
+                        disabled={busy}
+                        onClick={() => needName(() => setBuilder("picks"))}
                         title="Quick picks"
                         line="No account needed. Search and pick your top artists and songs."
                       />
                     )}
                     {health.search && (
                       <SourceButton
-                        disabled={!named || busy}
-                        onClick={() => setBuilder("export")}
+                        disabled={busy}
+                        onClick={() => needName(() => setBuilder("export"))}
                         title="Upload Spotify data"
                         line="Your real year of listening, read on this phone. Most accurate."
                       />
@@ -296,8 +307,8 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
                     {health.spotify && (
                       <button
                         type="button"
-                        disabled={!named || busy}
-                        onClick={() => setShowSpotify(!showSpotify)}
+                        disabled={busy}
+                        onClick={() => needName(() => setShowSpotify(!showSpotify))}
                         className="press caps self-start text-[13px] underline underline-offset-4 opacity-80 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-cream disabled:opacity-40"
                       >
                         On the SoundCheck Spotify list? Sign in directly
@@ -340,7 +351,7 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
                         </p>
                         <Button
                           type="submit"
-                          disabled={!named || busy}
+                          disabled={busy}
                           className="mt-4 w-full"
                         >
                           {busy ? "Opening Spotify" : "Continue to Spotify"}
@@ -349,8 +360,8 @@ export function Join({ code, state, onJoined, onError, blocked = null }: JoinPro
                     )}
                     <button
                       type="button"
-                      disabled={!named || busy}
-                      onClick={sample}
+                      disabled={busy}
+                      onClick={() => needName(sample)}
                       className="press caps self-start text-[13px] underline underline-offset-4 opacity-80 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-cream disabled:opacity-40"
                     >
                       Just trying it? Use a sample listener

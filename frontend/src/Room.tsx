@@ -326,7 +326,7 @@ function Lobby({
         className="min-h-[calc(100dvh-24px)] px-6 pb-24 pt-12 sm:min-h-[calc(100dvh-48px)] sm:px-[7%] sm:pt-16"
       >
         <h2 className="display text-center text-[clamp(28px,4.2vw,72px)]">
-          Put your friends taste
+          Put your friends&rsquo; taste
           <br />
           to the test
         </h2>
@@ -339,12 +339,35 @@ function Lobby({
                 {state.code}
               </p>
             </div>
-            <Button variant="ghost" onClick={invite} className="self-start">
-              {copied ? "Link copied" : "Invite friends"}
-            </Button>
-
             {isHost ? (
               <>
+                <p className="caps text-[clamp(15px,1.5vw,20px)] leading-snug opacity-90">
+                  {state.players.length} in the room.{" "}
+                  {state.players.length < 2
+                    ? "Need at least 2 to play."
+                    : "Enough to start."}
+                </p>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    onClick={start}
+                    disabled={state.players.length < 2 || starting}
+                  >
+                    {starting
+                      ? state.ai
+                        ? "Writing questions"
+                        : "Starting"
+                      : "Start the quiz"}
+                  </Button>
+                  {!allBots && (
+                    <Button variant="ghost" onClick={onBots}>
+                      Add demo friends
+                    </Button>
+                  )}
+                </div>
+                <Button variant="ghost" onClick={invite} className="self-start">
+                  {copied ? "Link copied" : "Invite friends"}
+                </Button>
+                <p className="caps mt-2 border-t-2 border-cream/25 pt-6 text-[14px] opacity-80">Game settings</p>
                 <fieldset>
                   <legend className="caps mb-3 text-[14px] opacity-80">
                     Mode
@@ -412,37 +435,19 @@ function Lobby({
                     the plain fact.
                   </p>
                 )}
-                <p className="caps text-[clamp(15px,1.5vw,20px)] leading-snug opacity-90">
-                  {state.players.length} in the room.{" "}
-                  {state.players.length < 2
-                    ? "Need at least 2 to play."
-                    : "Enough to start."}
-                </p>
-                <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
-                  <Button
-                    onClick={start}
-                    disabled={state.players.length < 2 || starting}
-                  >
-                    {starting
-                      ? state.ai
-                        ? "Writing questions"
-                        : "Starting"
-                      : "Start the quiz"}
-                  </Button>
-                  {!allBots && (
-                    <Button variant="ghost" onClick={onBots}>
-                      Add demo friends
-                    </Button>
-                  )}
-                </div>
               </>
             ) : (
+              <>
+              <Button variant="ghost" onClick={invite} className="self-start">
+                {copied ? "Link copied" : "Invite friends"}
+              </Button>
               <p className="caps text-[18px] leading-snug">
                 {state.players.length} in the room. Waiting for{" "}
                 {host?.name ?? "the host"} to start a {state.length}-question{" "}
                 {mode.label} game
                 {state.teams ? " in teams" : ""}.
               </p>
+              </>
             )}
             {state.season && state.season.games > 0 && (
               <div className="rounded-md border-2 border-cream/40 p-4">
