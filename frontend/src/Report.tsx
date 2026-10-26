@@ -29,6 +29,8 @@ type Props = { state: RoomState; isHost: boolean; onRematch: () => void };
 
 export function Report({ state, isHost, onRematch }: Props) {
   const ranked = [...state.players].sort((a, b) => b.score - a.score);
+  // Only a clear, nonzero leader "knows everyone's taste"; a 0-0 tie doesn't.
+  const clearWinner = ranked.length > 0 && ranked[0].score > 0 && (ranked.length === 1 || ranked[0].score > ranked[1].score);
   const host = state.players.find((p) => p.id === state.host_id);
   const cards = state.cards ?? [];
   const meIndex = ranked.findIndex((p) => p.id === state.me);
@@ -87,7 +89,7 @@ export function Report({ state, isHost, onRematch }: Props) {
                     {p.name}
                   </p>
                   <p className="mt-1 text-[clamp(15px,1.4vw,20px)] text-paper/80">
-                    {i === 0 ? "Knows everyone's taste" : `${pad(i + 1)} place`}{" "}
+                    {i === 0 && clearWinner ? "Knows everyone's taste" : `${pad(i + 1)} place`}{" "}
                     &middot; {p.right} right
                     {p.id === state.me ? " · you" : ""}
                   </p>
@@ -309,7 +311,7 @@ function StoryCard({
       )}
       <div className="flex flex-col items-center gap-6">
         <p className="caps text-[56px] leading-tight">
-          {place === 1
+          {place === 1 && score > 0
             ? "Knew everyone's taste"
             : `${pad(place)} of ${pad(of)}`}
         </p>
