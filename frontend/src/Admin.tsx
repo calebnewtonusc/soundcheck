@@ -24,9 +24,7 @@ export function Admin() {
   const [copied, setCopied] = useState("");
 
   const load = useCallback(async () => {
-    const res = await fetch(
-      `/api/admin/access?${new URLSearchParams({ key: key() })}`,
-    );
+    const res = await fetch("/api/admin/access", { headers: { "X-Admin-Key": key() } });
     if (!res.ok) {
       setError(
         res.status === 404

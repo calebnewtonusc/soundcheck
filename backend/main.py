@@ -267,7 +267,9 @@ class AdminSet(BaseModel):
 
 
 @app.get("/api/admin/access")
-async def admin_access(key: str = ""):
+async def admin_access(request: Request):
+    # Header, not query string: query strings land in proxy and access logs.
+    key = request.headers.get("x-admin-key", "")
     _admin(key)
     rows = await store.list_access()
     added = sum(1 for r in rows if r.get("status") == "added")
@@ -282,7 +284,10 @@ async def admin_set(body: AdminSet):
     if not await store.set_access(body.email, body.status):
         raise HTTPException(503, "Couldn't save that.")
     _spots["checked"] = 0.0
-    return await admin_access(body.key)
+    rows = await store.list_access()
+    added = sum(1 for r in rows if r.get("status") == "added")
+    return {"requests": rows, "spots_total": SPOTIFY_SPOTS, "spots_used": OWNER_SPOTS + added,
+            "dashboard": f"https://developer.spotify.com/dashboard/{os.environ.get('SPOTIFY_CLIENT_ID', '')}/users"}
 
 
 @app.get("/api/health")
