@@ -254,9 +254,22 @@ async def spotify_access(request: Request, body: AccessRequest):
     return {"ok": True}
 
 
-def _admin(key: str) -> None:
+admin_fails: dict[str, deque] = defaultdict(deque)
+# Ten wrong keys an hour per IP: plenty for a typo, nothing for guessing a
+# 32-character random key.
+ADMIN_FAIL_LIMIT = 10
+
+
+def _admin(request: Request, key: str) -> None:
+    fails = admin_fails[_ip(request)]
+    now = time.time()
+    while fails and now - fails[0] > 3600:
+        fails.popleft()
+    if len(fails) >= ADMIN_FAIL_LIMIT:
+        raise HTTPException(429, "Too many tries.")
     want = os.environ.get("ADMIN_KEY", "")
-    if not want or not secrets.compare_digest(want, key):
+    if len(want) < 32 or len(key) > 100 or not secrets.compare_digest(want, key):
+        fails.append(now)
         raise HTTPException(404, "Not found.")
 
 
@@ -269,8 +282,7 @@ class AdminSet(BaseModel):
 @app.get("/api/admin/access")
 async def admin_access(request: Request):
     # Header, not query string: query strings land in proxy and access logs.
-    key = request.headers.get("x-admin-key", "")
-    _admin(key)
+    _admin(request, request.headers.get("x-admin-key", ""))
     rows = await store.list_access()
     added = sum(1 for r in rows if r.get("status") == "added")
     _spots.update(added=added, checked=time.time())
@@ -279,8 +291,8 @@ async def admin_access(request: Request):
 
 
 @app.post("/api/admin/access")
-async def admin_set(body: AdminSet):
-    _admin(body.key)
+async def admin_set(request: Request, body: AdminSet):
+    _admin(request, body.key)
     if not await store.set_access(body.email, body.status):
         raise HTTPException(503, "Couldn't save that.")
     _spots["checked"] = 0.0
