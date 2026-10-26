@@ -66,7 +66,8 @@ async def _saver() -> None:
         now = time.time()
         for code, room in list(rooms.items()):
             room.tick()
-            if now - room.touched > ROOM_TTL:
+            idle = now - room.touched
+            if idle > ROOM_TTL or (not room.players and idle > EMPTY_ROOM_TTL):
                 rooms.pop(code, None)
                 saved_version.pop(code, None)
                 continue
@@ -97,12 +98,28 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="SoundCheck", lifespan=lifespan)
 
 
-def _room(code: str) -> Room:
+def _room(code: str, touch: bool = True) -> Room:
     room = rooms.get(code.upper())
     if not room:
         raise HTTPException(404, "No room with that code. Check it and try again.")
-    room.touched = time.time()
+    if touch:
+        room.touched = time.time()
     return room
+
+
+def _ip(request: Request) -> str:
+    # Railway's proxy appends the real client address as the last
+    # X-Forwarded-For entry; anything before it is whatever the client sent.
+    fwd = [x.strip() for x in request.headers.get("x-forwarded-for", "").split(",") if x.strip()]
+    return fwd[-1] if fwd else (request.client.host if request.client else "?")
+
+
+lookups: dict[str, deque] = defaultdict(deque)
+# Members poll once a second; 150 a minute leaves room for a slow phone
+# catching up, and stops a script walking the code space.
+LOOKUP_LIMIT = 150
+# A room nobody ever joined is gone after an hour, not 30 days.
+EMPTY_ROOM_TTL = 60 * 60
 
 
 def _auth(room: Room, pid: str, key: str):
@@ -201,8 +218,7 @@ def health():
 
 @app.post("/api/rooms")
 def create_room(request: Request):
-    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "?")
-    q = creates[ip]
+    q = creates[_ip(request)]
     now = time.time()
     while q and now - q[0] > CREATE_WINDOW:
         q.popleft()
@@ -220,11 +236,20 @@ def create_room(request: Request):
 
 
 @app.get("/api/rooms/{code}")
-def get_room(code: str, pid: str = "", key: str = ""):
-    room = _room(code)
+def get_room(request: Request, code: str, pid: str = "", key: str = ""):
+    hits = lookups[_ip(request)]
+    now = time.time()
+    while hits and now - hits[0] > 60:
+        hits.popleft()
+    if len(hits) >= LOOKUP_LIMIT:
+        raise HTTPException(429, "Slow down a sec.")
+    hits.append(now)
+    room = _room(code, touch=False)
     p = room.players.get(pid)
-    me = pid if p and secrets.compare_digest(p.key, key) else None
-    return room.view(me)
+    if p and secrets.compare_digest(p.key, key):
+        room.touched = now
+        return room.view(pid)
+    return room.public_view()
 
 
 def _act(room: Room, fn, pid: str):
@@ -298,8 +323,7 @@ async def search(request: Request, q: str, kind: str = "artist"):
         raise HTTPException(400, "Search for an artist or a song.")
     if not spotify.search_configured():
         raise HTTPException(503, "Search isn't set up on this server.")
-    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "?")
-    hits = searches[ip]
+    hits = searches[_ip(request)]
     now = time.time()
     while hits and now - hits[0] > 60:
         hits.popleft()

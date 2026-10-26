@@ -181,3 +181,21 @@ def test_season_and_fresh_questions_across_rematches():
     assert len(first & second) <= 1
     season = room.view(a.id)["season"]
     assert season["games"] == 1 and len(season["table"]) == 4
+
+
+def test_leaving_scrubs_the_season():
+    room, (a, b) = room_with(2, 13)
+    while room.phase != "report":
+        room.next()
+    room.rematch()
+    room.remove_player(b.id)
+    for g in room.history:
+        assert b.id not in g["scores"] and b.id not in g.get("names", {})
+    assert not any(b.name in t for t in room.asked)
+
+
+def test_strangers_see_only_the_join_screen():
+    room, (a, _) = room_with(2, 14)
+    pub = room.public_view()
+    assert "question" not in pub and "reveal" not in pub
+    assert all(p["score"] == 0 for p in pub["players"])

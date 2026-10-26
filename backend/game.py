@@ -614,7 +614,15 @@ class Room:
     def remove_player(self, pid: str) -> None:
         if self.phase != "lobby" or pid not in self.players:
             raise ValueError("Players can only leave from the lobby.")
-        self.players.pop(pid)
+        gone = self.players.pop(pid)
+        # "Leave and delete my data" covers the season table and the
+        # question log too, not just the live player list.
+        for g in self.history:
+            g["scores"].pop(pid, None)
+            g.get("names", {}).pop(pid, None)
+            if g.get("winner") == pid:
+                g["winner"] = None
+        self.asked = [t for t in self.asked if gone.name not in t]
         if self.host_id == pid:
             humans = [p for p in self.players.values() if not p.is_bot]
             self.host_id = humans[0].id if humans else None
@@ -845,6 +853,19 @@ class Room:
         self.version += 1
 
     # --- what one player is allowed to see --------------------------------
+    @locked
+    def public_view(self) -> dict:
+        """What someone holding only the code sees: enough to decide to join."""
+        out = {"code": self.code, "phase": self.phase, "me": None, "host_id": None, "version": self.version,
+               "length": self.length, "mode": self.mode, "teams": self.teams, "ai": self.ai,
+               "players": [{"id": p.id, "name": p.name, "avatar": p.avatar, "score": 0, "source": p.source, "bot": p.is_bot,
+                            "streak": 0, "right": 0, "answered": False, "team": p.team}
+                           for p in sorted(self.players.values(), key=lambda p: p.joined_at)]}
+        if self.history:
+            season = self._season()
+            out["season"] = {"games": season["games"], "table": season["table"][:1]}
+        return out
+
     @locked
     def view(self, me: str | None) -> dict:
         self._tick()
