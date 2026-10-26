@@ -41,22 +41,23 @@ type JoinProps = {
   state: RoomState;
   onJoined: (c: Creds) => void;
   onError: (m: string) => void;
+  blocked?: string | null;
 };
 
-export function Join({ code, state, onJoined, onError }: JoinProps) {
+export function Join({ code, state, onJoined, onError, blocked = null }: JoinProps) {
   const [pass, setPass] = useState<Pass | null>(() => loadPass());
   const [name, setName] = useState(() => loadPass()?.name ?? "");
   const [busy, setBusy] = useState(false);
   const [recent, setRecent] = useState(true);
-  const [health, setHealth] = useState({ spotify: false, search: true });
+  const [health, setHealth] = useState({ spotify: false, search: true, spotsLeft: 0 });
   const [builder, setBuilder] = useState<"picks" | "export" | null>(null);
   const [showSpotify, setShowSpotify] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.health().then(
-      (h) => setHealth({ spotify: h.spotify, search: h.search }),
-      () => setHealth({ spotify: false, search: false }),
+      (h) => setHealth({ spotify: h.spotify, search: h.search, spotsLeft: h.spotify_spots_left }),
+      () => setHealth({ spotify: false, search: false, spotsLeft: 0 }),
     );
     if (!loadPass() && window.matchMedia("(pointer: fine)").matches)
       inputRef.current?.focus();
@@ -164,6 +165,7 @@ export function Join({ code, state, onJoined, onError }: JoinProps) {
             className="flex w-full min-w-0 max-w-lg flex-col gap-6 lg:shrink-0"
           >
             <Wordmark stacked className="text-[clamp(44px,5vw,76px)]" />
+            {blocked !== null && <RequestAccess code={code} name={blocked || name} />}
 
             {started ? (
               <p className="caps text-[18px]">
@@ -278,8 +280,12 @@ export function Join({ code, state, onJoined, onError }: JoinProps) {
                       <SourceButton
                         disabled={!named || busy}
                         onClick={() => setShowSpotify(!showSpotify)}
-                        title="Spotify login"
-                        line="Invite-only beta: Spotify allows 5 accounts until SoundCheck is approved."
+                        title="Sign in with Spotify"
+                        line={
+                          health.spotsLeft > 0
+                            ? `For friends on the SoundCheck Spotify list. ${health.spotsLeft} ${health.spotsLeft === 1 ? "spot" : "spots"} left.`
+                            : "For friends already on the SoundCheck Spotify list."
+                        }
                       />
                     )}
                     {showSpotify && health.spotify && (
@@ -384,5 +390,82 @@ function SourceButton({
         &rarr;
       </span>
     </button>
+  );
+}
+
+/** Shown when Spotify turns a sign-in away: one box to ask for a spot. */
+function RequestAccess({ code, name }: { code: string; name: string }) {
+  const [email, setEmail] = useState("");
+  const [who, setWho] = useState(name);
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "full" | "error">("idle");
+  const [msg, setMsg] = useState("");
+
+  async function send() {
+    setState("sending");
+    try {
+      const res = await fetch("/api/spotify-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: who.trim() || "Friend", email: email.trim(), room: code }),
+      });
+      if (res.status === 409) {
+        setState("full");
+        return;
+      }
+      if (!res.ok) {
+        const body: unknown = await res.json().catch(() => null);
+        setMsg(body && typeof body === "object" && "detail" in body && typeof body.detail === "string" ? body.detail : "Couldn't send that. Try again.");
+        setState("error");
+        return;
+      }
+      setState("sent");
+    } catch {
+      setMsg("Couldn't send that. Try again.");
+      setState("error");
+    }
+  }
+
+  if (state === "sent") {
+    return (
+      <div className="rounded-md bg-cream p-4 text-ink">
+        <p className="caps text-[15px]">You're on the list</p>
+        <p className="mt-1 text-[14px] leading-snug">Once you're added on Spotify's side, tap Sign in with Spotify again. Want in now? Quick picks takes a minute.</p>
+      </div>
+    );
+  }
+  if (state === "full") {
+    return (
+      <div className="rounded-md bg-cream p-4 text-ink">
+        <p className="caps text-[15px]">Spotify sign-in is full</p>
+        <p className="mt-1 text-[14px] leading-snug">Spotify lets SoundCheck sign in 5 people while it's in beta. Quick picks gets you the same game in a minute.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3 rounded-md bg-cream p-4 text-ink">
+      <p className="caps text-[15px]">Spotify needs to let you in first</p>
+      <p className="text-[14px] leading-snug">Drop the email on your Spotify account and you'll get one of the sign-in spots.</p>
+      {!name && (
+        <input
+          value={who}
+          onChange={(e) => setWho(e.target.value.slice(0, 20))}
+          placeholder="Your name"
+          className="rounded-md border-2 border-ink/30 bg-transparent px-3 py-2.5 text-[16px] placeholder:text-ink/50 focus-visible:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        />
+      )}
+      <input
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@email.com"
+        className="rounded-md border-2 border-ink/30 bg-transparent px-3 py-2.5 text-[16px] placeholder:text-ink/50 focus-visible:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+      />
+      <Button type="button" tone="ink" disabled={!email.includes("@") || state === "sending"} onClick={send}>
+        {state === "sending" ? "Sending" : "Ask for a spot"}
+      </Button>
+      {state === "error" && <p className="font-mono text-[12px]">{msg}</p>}
+    </div>
   );
 }

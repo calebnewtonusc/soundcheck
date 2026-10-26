@@ -211,9 +211,83 @@ class React(Who):
     label: str = Field(max_length=16)
 
 
+# Spotify Development Mode: 5 accounts per app, and the owner's is one.
+SPOTIFY_SPOTS = 5
+OWNER_SPOTS = 1
+_spots = {"added": 0, "checked": 0.0}
+
+
+async def _spots_left() -> int:
+    if time.time() - _spots["checked"] > 60:
+        rows = await store.list_access()
+        _spots.update(added=sum(1 for r in rows if r.get("status") == "added"), checked=time.time())
+    return max(0, SPOTIFY_SPOTS - OWNER_SPOTS - _spots["added"])
+
+
+EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,120}\.[a-zA-Z]{2,}$")
+
+
+class AccessRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    email: str = Field(max_length=200)
+    room: str = Field(default="", max_length=8)
+
+
+requests_log: dict[str, deque] = defaultdict(deque)
+
+
+@app.post("/api/spotify-access")
+async def spotify_access(request: Request, body: AccessRequest):
+    if not EMAIL.match(body.email.strip()):
+        raise HTTPException(400, "That doesn't look like an email.")
+    hits = requests_log[_ip(request)]
+    now = time.time()
+    while hits and now - hits[0] > 3600:
+        hits.popleft()
+    if len(hits) >= 5:
+        raise HTTPException(429, "Already sent. Hang tight.")
+    hits.append(now)
+    if await _spots_left() <= 0:
+        raise HTTPException(409, "Spotify sign-in is full for now. Quick picks works the same.")
+    if not await store.request_access(body.email.strip(), body.name.strip(), body.room.upper()):
+        raise HTTPException(503, "Couldn't save that. Try again in a sec.")
+    return {"ok": True}
+
+
+def _admin(key: str) -> None:
+    want = os.environ.get("ADMIN_KEY", "")
+    if not want or not secrets.compare_digest(want, key):
+        raise HTTPException(404, "Not found.")
+
+
+class AdminSet(BaseModel):
+    key: str = Field(max_length=100)
+    email: str = Field(max_length=200)
+    status: str = Field(pattern="^(pending|added|declined)$")
+
+
+@app.get("/api/admin/access")
+async def admin_access(key: str = ""):
+    _admin(key)
+    rows = await store.list_access()
+    added = sum(1 for r in rows if r.get("status") == "added")
+    _spots.update(added=added, checked=time.time())
+    return {"requests": rows, "spots_total": SPOTIFY_SPOTS, "spots_used": OWNER_SPOTS + added,
+            "dashboard": f"https://developer.spotify.com/dashboard/{os.environ.get('SPOTIFY_CLIENT_ID', '')}/users"}
+
+
+@app.post("/api/admin/access")
+async def admin_set(body: AdminSet):
+    _admin(body.key)
+    if not await store.set_access(body.email, body.status):
+        raise HTTPException(503, "Couldn't save that.")
+    _spots["checked"] = 0.0
+    return await admin_access(body.key)
+
+
 @app.get("/api/health")
-def health():
-    return {"ok": True, "spotify": spotify.configured(), "store": store.configured(), "ai": ai.configured(), "search": spotify.search_configured(), "rooms": len(rooms)}
+async def health():
+    return {"spotify_spots_left": await _spots_left() if spotify.configured() else 0,"ok": True, "spotify": spotify.configured(), "store": store.configured(), "ai": ai.configured(), "search": spotify.search_configured(), "rooms": len(rooms)}
 
 
 @app.post("/api/rooms")
@@ -467,9 +541,10 @@ async def callback(request: Request, background: BackgroundTasks, state: str = "
         token = await spotify.exchange(code)
         display, avatar, profile = await spotify.fetch_profile(token, pending["tz"], include_recent=pending["recent"])
     except spotify.SpotifyError as e:
-        msg = ("This Spotify account isn't on SoundCheck's beta list yet. Join with a sample profile for now."
-               if str(e) == "not_registered" else "Couldn't read your Spotify. Try again.")
-        return _bounce(back, {"error": msg})
+        if str(e) == "not_registered":
+            # Not on the app's allowlist yet: hand them the one-box request form.
+            return _bounce(back, {"spotify": "not_registered", "name": pending["name"]})
+        return _bounce(back, {"error": "Couldn't read your Spotify. Try again."})
     room = rooms.get(pending["room"])
     if not room:
         return _bounce("/", {"error": "That room closed."})

@@ -39,6 +39,7 @@ export function Room({ code }: { code: string }) {
   const [missing, setMissing] = useState(false);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState("");
+  const [blocked, setBlocked] = useState<string | null>(null);
   const [aiOn, setAiOn] = useState(false);
 
   useEffect(() => {
@@ -62,6 +63,7 @@ export function Room({ code }: { code: string }) {
         () => undefined,
       );
     }
+    if (q.get("spotify") === "not_registered") setBlocked(q.get("name") ?? "");
     const err = q.get("error");
     if (err) setError(err);
     if (q.toString()) window.history.replaceState({}, "", `/room/${code}`);
@@ -155,6 +157,7 @@ export function Room({ code }: { code: string }) {
             setCreds(c);
           }}
           onError={setError}
+          blocked={blocked}
         />
       </>
     );

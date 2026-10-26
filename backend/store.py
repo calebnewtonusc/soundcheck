@@ -64,3 +64,35 @@ async def prune(before: float) -> None:
         await _rpc("delete_rooms", {"before": _iso(before)})
     except httpx.HTTPError as e:
         log.warning("prune failed: %s", e)
+
+
+async def request_access(email: str, name: str, room: str) -> bool:
+    if not configured():
+        return False
+    try:
+        await _rpc("request_access", {"req_email": email, "req_name": name, "req_room": room})
+        return True
+    except httpx.HTTPError as e:
+        log.warning("request_access failed: %s", e)
+        return False
+
+
+async def list_access() -> list[dict]:
+    if not configured():
+        return []
+    try:
+        return await _rpc("list_access", {}) or []
+    except httpx.HTTPError as e:
+        log.warning("list_access failed: %s", e)
+        return []
+
+
+async def set_access(email: str, status: str) -> bool:
+    if not configured():
+        return False
+    try:
+        await _rpc("set_access", {"req_email": email, "new_status": status})
+        return True
+    except httpx.HTTPError as e:
+        log.warning("set_access failed: %s", e)
+        return False

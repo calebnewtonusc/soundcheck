@@ -128,7 +128,7 @@ export const api = {
   answer: (code: string, c: Creds, choice: string) => post<RoomState>(`/api/rooms/${code}/answer`, { ...c, choice }),
   next: (code: string, c: Creds) => post<RoomState>(`/api/rooms/${code}/next`, c),
   rematch: (code: string, c: Creds) => post<RoomState>(`/api/rooms/${code}/rematch`, c),
-  health: () => call<{ spotify: boolean; ai: boolean; search: boolean }>("/api/health"),
+  health: () => call<{ spotify: boolean; ai: boolean; search: boolean; spotify_spots_left: number }>("/api/health"),
   loginUrl: (code: string, name: string, recent: boolean) =>
     `/api/login?${new URLSearchParams({ room: code, name, tz: String(new Date().getTimezoneOffset()), recent: recent ? "1" : "0" })}`,
 };

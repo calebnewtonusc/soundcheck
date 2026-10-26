@@ -32,11 +32,7 @@ export function TasteBuilder({
   onDone: (r: TasteResult) => void;
   onCancel: () => void;
 }) {
-  return kind === "picks" ? (
-    <Picks onDone={onDone} onCancel={onCancel} />
-  ) : (
-    <Upload onDone={onDone} onCancel={onCancel} />
-  );
+  return kind === "picks" ? <Picks onDone={onDone} onCancel={onCancel} /> : <Upload onDone={onDone} onCancel={onCancel} />;
 }
 
 function Picks({

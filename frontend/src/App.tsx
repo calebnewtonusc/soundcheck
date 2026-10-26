@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Admin } from "./Admin";
 import { api } from "./api";
 import { Room } from "./Room";
 import { Arrow, Button, Page, Slide, Star, Toast, Wordmark } from "./ui";
@@ -20,6 +21,7 @@ export function go(path: string) {
 
 export default function App() {
   const path = useRoute();
+  if (path === "/admin") return <Admin />;
   const match = path.match(/^\/room\/([A-Za-z]{4})\/?$/);
   if (match) return <Room code={match[1].toUpperCase()} />;
   return <Home />;
