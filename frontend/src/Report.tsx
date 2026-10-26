@@ -231,7 +231,15 @@ function ShareSlide({
       <div className="h-[480px] w-[270px] overflow-hidden rounded-2xl ring-4 ring-cream">
         {/* 270 / 1080 = 0.25: the real 1080x1920 card, shown at a quarter. */}
         <div className="origin-top-left scale-[0.25]">
-          <StoryCard name={name} place={place} of={of} score={score} right={right} card={card} code={code} />
+          <StoryCard
+            name={name}
+            place={place}
+            of={of}
+            score={score}
+            right={right}
+            card={card}
+            code={code}
+          />
         </div>
       </div>
       <Button onClick={save} disabled={status === "busy"}>
@@ -303,9 +311,9 @@ function StoryCard({
         <p className="caps text-[56px] leading-tight">
           {place === 1
             ? "Knew everyone's taste"
-            : `${pad(place)} of ${pad(of)}`}{" "}
-          &middot; {score} pts
+            : `${pad(place)} of ${pad(of)}`}
         </p>
+        <p className="font-cond text-[120px] leading-none">{score} pts</p>
         <p className="caps text-[38px] opacity-85">
           {right} right &middot; Room {code}
         </p>
@@ -321,9 +329,13 @@ function TeamBanner({ scores }: { scores: { red: number; blue: number } }) {
   const tie = scores.red === scores.blue;
   const winner = scores.red > scores.blue ? "red" : "blue";
   return (
-    <section className={`grain flex flex-col items-center gap-4 rounded-[22px] px-6 py-14 text-center text-cream sm:rounded-[28px] ${tie ? "bg-mustard text-ink" : winner === "red" ? "bg-red" : "bg-blue"}`}>
+    <section
+      className={`grain flex flex-col items-center gap-4 rounded-[22px] px-6 py-14 text-center text-cream sm:rounded-[28px] ${tie ? "bg-mustard text-ink" : winner === "red" ? "bg-red" : "bg-blue"}`}
+    >
       <p className="caps text-[clamp(15px,1.6vw,22px)] opacity-90">Team mode</p>
-      <p className="display text-[clamp(44px,8vw,140px)]">{tie ? "Dead even" : `Team ${winner} wins`}</p>
+      <p className="display text-[clamp(44px,8vw,140px)]">
+        {tie ? "Dead even" : `Team ${winner} wins`}
+      </p>
       <p className="font-cond text-[clamp(28px,3.4vw,52px)] uppercase">
         Red {scores.red} &nbsp;/&nbsp; Blue {scores.blue}
       </p>
