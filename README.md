@@ -7,7 +7,7 @@ SoundCheck turns a group's Spotify listening history into a party quiz. Everyone
 ## How a game runs
 
 1. The host starts a room and texts the link. The link keeps working for 30 days, so a friend group reuses it every week and builds season standings.
-2. Everyone brings their taste one of four ways: quick picks (search and pick 3 to 5 artists and songs), an upload of their Spotify data export (read on their own phone, only the summary is sent), Spotify login (limited to 5 accounts while the app is in Spotify Development Mode), or a sample listener.
+2. Everyone brings their taste: Connect Spotify through stats.fm (sign in there once with Spotify, paste the username back; no cap), quick picks (search and pick 3 to 5 artists and songs), an upload of their Spotify data export (read on their own phone, only the summary is sent), direct Spotify login (5 accounts while the app is in Spotify Development Mode, with an in-app request box and an admin page at /admin#key), or a sample listener.
 3. The host picks a mode (Classic, Wrapped, Road trip, Decades, Genres), a length (5, 8 or 12) and optionally team mode or AI wording.
 4. Questions come in two shapes: pick a friend ("Who's the biggest Drake fan in the room?") or pick an answer ("What's the last song Kaylie played?"). Right answers score 100 plus up to 50 for speed, and whoever a question is about gets 50 for every friend who got them right.
 5. After each reveal everyone can react (CALLED IT, NO WAY, SUS, RESPECT). The report shows the four game cards, final scores, team results and a story-sized share card.
@@ -17,7 +17,7 @@ Your taste is saved on your phone, so the next room is one tap ("Join as Caleb")
 
 ## Stack
 
-React + Vite + Tailwind in `frontend/`, FastAPI in `backend/`, Spotify Web API for login and catalog search, MusicBrainz for genres (Spotify stopped returning them in February 2026), Supabase for room snapshots, Claude for the optional question wording. Installable as a home screen app.
+React + Vite + Tailwind in `frontend/`, FastAPI in `backend/`, stats.fm public profiles and the Spotify Web API for listening data and catalog search, MusicBrainz for genres (Spotify stopped returning them in February 2026), Supabase for room snapshots, Claude for the optional question wording. Installable as a home screen app.
 
 ## Run it
 
