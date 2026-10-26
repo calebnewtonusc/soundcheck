@@ -424,14 +424,16 @@ function Sidebar({
         </ol>
       </div>
 
-      <Button
+      <div className="mt-auto hidden lg:block">
+        <Button
         variant="dark"
         onClick={cta.onClick}
         disabled={cta.disabled}
-        className="mt-auto hidden min-h-14 w-full justify-start px-5 lg:inline-flex"
+        className="min-h-14 w-full justify-start px-5"
       >
         {cta.label.toUpperCase()} <span aria-hidden>&rarr;</span>
       </Button>
+      </div>
     </aside>
   );
 }

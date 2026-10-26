@@ -8,6 +8,7 @@ is never rewritten.
 
 from __future__ import annotations
 
+import html
 import logging
 import os
 import re
@@ -48,7 +49,8 @@ async def reword(texts: list[str], names: list[str], keep_words: list[list[str]]
     """Return rewritten texts, falling back per question to the original."""
     if not configured() or not texts:
         return texts
-    numbered = "\n".join(f'<question n="{i + 1}">{t}</question>' for i, t in enumerate(texts))
+    # Titles and names are user-supplied: escape them so none can close a tag.
+    numbered = "\n".join(f'<question n="{i + 1}">{html.escape(t, quote=True)}</question>' for i, t in enumerate(texts))
     try:
         client = anthropic.AsyncAnthropic(timeout=TIMEOUT_S, max_retries=1)
         response = await client.messages.parse(
@@ -69,6 +71,7 @@ async def reword(texts: list[str], names: list[str], keep_words: list[list[str]]
         return texts
     result = []
     for original, new, extra in zip(texts, out, keep_words):
+        new = html.unescape(new)
         required = _must_keep(original, names) + extra
         # A rewrite may change the voice, never who or what the question is about.
         new_names = [n for n in names if n in new and n not in original]
