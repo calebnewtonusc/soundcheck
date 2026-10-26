@@ -35,7 +35,7 @@ def _load_env() -> None:
 _load_env()
 
 from . import ai, spotify, statsfm, store  # noqa: E402
-from .game import Room, new_code  # noqa: E402
+from .game import MAX_PLAYERS, Room, new_code  # noqa: E402
 from .samples import SAMPLES, sample_profile  # noqa: E402
 
 # A room is a friend group's standing link: it keeps season standings and
@@ -393,8 +393,13 @@ stats_lookups: dict[str, deque] = defaultdict(deque)
 
 
 @app.post("/api/rooms/{code}/join-statsfm")
-async def join_statsfm(request: Request, code: str, body: JoinStats):
+async def join_statsfm(request: Request, code: str, body: JoinStats, background: BackgroundTasks):
     room = _room(code)
+    # Refuse before any outbound call: a full or started room costs nothing.
+    if room.phase != "lobby":
+        raise HTTPException(400, "This game already started. Wait for the rematch.")
+    if len(room.players) >= MAX_PLAYERS:
+        raise HTTPException(400, "This room is full.")
     handle = statsfm.handle_from(body.handle)
     if not handle:
         raise HTTPException(400, "Paste your stats.fm profile link or username.")
@@ -412,11 +417,13 @@ async def join_statsfm(request: Request, code: str, body: JoinStats):
         raise HTTPException(400, str(e))
     except httpx.HTTPError:
         raise HTTPException(502, "stats.fm didn't answer. Try again in a sec.")
-    await spotify.add_years(profile)
     try:
         p = room.add_player(body.name.strip() or display, profile, "statsfm", avatar=avatar)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    # Release years only feed decade questions; fill them after joining so
+    # the player isn't waiting on ~20 catalog searches.
+    background.add_task(spotify.add_years, profile)
     return {"pid": p.id, "key": p.key, "name": p.name, "avatar": avatar, "profile": profile, "handle": handle}
 
 

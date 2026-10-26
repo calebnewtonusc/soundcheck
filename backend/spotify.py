@@ -226,11 +226,16 @@ async def search(q: str, kind: str) -> list[dict]:
     return [_track(t) for t in items if t]
 
 
+# Release years don't change: one search per (track, artist) for the life of
+# the process, however many players share the song.
+_year_cache: dict[tuple[str, str], int | None] = {}
+
+
 async def add_years(profile: dict, limit: int = 10) -> None:
     """Fill release years on the tracks decade questions use, via catalog search."""
     if not search_configured():
         return
-    seen: dict[tuple[str, str], int | None] = {}
+    seen = _year_cache
     for key in ("top_tracks_short", "top_tracks_long"):
         for t in profile.get(key, [])[:limit]:
             k = (t["name"], t["artist"])
