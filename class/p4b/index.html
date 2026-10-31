@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SoundCheck P4b</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Archivo:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --blue: #214a8b;
+        --red: #a63d2e;
+        --green: #1b5735;
+        --gold: #c8962e;
+        --cream: #d9cfbf;
+        --ink: #1f1d1d;
+        --paper: #efe7da;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #2a2a2a;
+        font-family: Archivo, sans-serif;
+        color: var(--cream);
+      }
+      #deck {
+        display: grid;
+        gap: 28px;
+        padding: 28px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .frame {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 1456 / 819;
+        overflow: hidden;
+        border-radius: 6px;
+      }
+      .slide {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 1456px;
+        height: 819px;
+        transform-origin: 0 0;
+        padding: 70px 84px;
+        overflow: hidden;
+      }
+      .slide.blue {
+        background: var(--blue);
+      }
+      .slide.red {
+        background: var(--red);
+      }
+      .slide.green {
+        background: var(--green);
+      }
+      .slide.gold {
+        background: var(--gold);
+        color: var(--ink);
+      }
+      .slide.cream {
+        background: var(--paper);
+        color: var(--blue);
+      }
+      .slide.ink {
+        background: var(--ink);
+      }
+      .slide::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.13;
+        background-image: radial-gradient(
+          rgba(0, 0, 0, 0.6) 1px,
+          transparent 1.2px
+        );
+        background-size: 5px 5px;
+      }
+      h1,
+      h2 {
+        font-family: "Bowlby One", sans-serif;
+        font-weight: 400;
+        text-transform: uppercase;
+        line-height: 0.92;
+        margin: 0;
+        letter-spacing: 0.01em;
+      }
+      h1 {
+        font-size: 132px;
+      }
+      h2 {
+        font-size: 74px;
+        margin-bottom: 30px;
+      }
+      .kicker {
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 20px;
+        margin: 0 0 18px;
+        opacity: 0.85;
+      }
+      p,
+      li {
+        font-size: 25px;
+        line-height: 1.35;
+      }
+      .big {
+        font-size: 38px;
+        font-weight: 800;
+        line-height: 1.2;
+        text-transform: uppercase;
+        max-width: 1180px;
+      }
+      .star {
+        position: absolute;
+        width: 74px;
+        height: 74px;
+        right: 60px;
+        bottom: 50px;
+        background: currentColor;
+        opacity: 0.9;
+        clip-path: polygon(
+          50% 0,
+          58% 32%,
+          85% 10%,
+          68% 40%,
+          100% 50%,
+          68% 60%,
+          85% 90%,
+          58% 68%,
+          50% 100%,
+          42% 68%,
+          15% 90%,
+          32% 60%,
+          0 50%,
+          32% 40%,
+          15% 10%,
+          42% 32%
+        );
+      }
+      .board {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+      }
+      .note {
+        background: var(--paper);
+        color: var(--ink);
+        padding: 12px 14px;
+        font-size: 18px;
+        line-height: 1.25;
+        font-weight: 600;
+        border-radius: 3px;
+        min-height: 96px;
+      }
+      .note:nth-child(3n) {
+        transform: rotate(-1.2deg);
+      }
+      .note:nth-child(4n) {
+        transform: rotate(1deg);
+      }
+      .note b {
+        display: block;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--red);
+        margin-bottom: 4px;
+      }
+      .note.top {
+        outline: 4px solid var(--gold);
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 56px;
+      }
+      .three {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 30px;
+      }
+      .card {
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: 8px;
+        padding: 24px;
+      }
+      .card h3 {
+        font-family: "Bowlby One", sans-serif;
+        font-weight: 400;
+        font-size: 30px;
+        text-transform: uppercase;
+        margin: 0 0 10px;
+        line-height: 1;
+      }
+      .card p,
+      .card li {
+        font-size: 21px;
+        margin: 0 0 8px;
+      }
+      ul.plain {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      ul.plain li {
+        margin-bottom: 10px;
+        padding-left: 26px;
+        position: relative;
+      }
+      ul.plain li::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 12px;
+        width: 12px;
+        height: 12px;
+        background: var(--gold);
+        transform: rotate(45deg);
+      }
+      .prompts li {
+        font-size: 27px;
+        font-weight: 600;
+      }
+      table.grid {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 22px;
+      }
+      .grid th,
+      .grid td {
+        padding: 13px 14px;
+        text-align: left;
+        border-bottom: 1px solid rgba(239, 231, 218, 0.25);
+      }
+      .grid th {
+        font-size: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        opacity: 0.8;
+      }
+      .grid td.n {
+        text-align: center;
+        font-weight: 800;
+        font-size: 26px;
+      }
+      .grid tr.win td {
+        color: var(--gold);
+      }
+      .ei {
+        position: relative;
+        height: 520px;
+        border-left: 3px solid var(--cream);
+        border-bottom: 3px solid var(--cream);
+        margin: 10px 0 0 60px;
+      }
+      .ei .ax {
+        position: absolute;
+        font-size: 17px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .ei .dot {
+        position: absolute;
+        background: var(--paper);
+        color: var(--ink);
+        font-size: 16px;
+        font-weight: 700;
+        padding: 6px 10px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+      .ei .dot.top {
+        background: var(--gold);
+      }
+      .ei .q {
+        position: absolute;
+        font-size: 15px;
+        opacity: 0.6;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .need {
+        background: #fff3b0;
+        color: #6b4b00;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: 700;
+      }
+      .slide.cream .need,
+      .slide.gold .need {
+        background: #fff;
+      }
+      .todo {
+        max-width: 1200px;
+        margin: 20px auto 0;
+        padding: 18px 28px;
+        background: #fff3b0;
+        color: #3a2a00;
+        border-radius: 6px;
+        font-size: 15px;
+      }
+      .todo a {
+        color: inherit;
+      }
+      .src {
+        position: absolute;
+        left: 84px;
+        bottom: 34px;
+        font-size: 14px;
+        opacity: 0.65;
+        max-width: 1100px;
+      }
+    </style>
+  </head>
+  <body>
+    <aside class="todo" aria-label="Open items">
+      <strong>Open items for the team</strong>
+      <ul id="todo-list"></ul>
+    </aside>
+    <main id="deck">
+      <!-- 1 cover -->
+      <section class="slide blue" data-n="1">
+        <p class="kicker">ACAD 324 · Project 4b · Ideation and Selection</p>
+        <h1>SoundCheck</h1>
+        <p class="big" style="margin-top: 26px">
+          Your friends. Their music. One very competitive quiz.
+        </p>
+        <p style="margin-top: 60px">
+          Team Peridot · Sam · Maia · Mia · Caleb · Kaylie
+        </p>
+        <span class="star"></span>
+      </section>
+
+      <!-- 2 HMW / PS -->
+      <section class="slide cream" data-n="2">
+        <p class="kicker">Our springboard from P4a</p>
+        <h2>Where we started</h2>
+        <div class="cols">
+          <div>
+            <p class="kicker">How might we</p>
+            <p class="big">
+              How might we turn the music friends listen to alone into something
+              they play together, so they find out what they share?
+            </p>
+          </div>
+          <div>
+            <p class="kicker">Problem statement</p>
+            <p style="font-size: 27px; font-weight: 600">
+              College friends each have a music identity, but listening stats
+              get looked at alone and group music talk stays informal. They want
+              a low-pressure way to find what they share and surprise each
+              other.
+            </p>
+            <p style="font-size: 19px">
+              <span class="need"
+                >Team: confirm the HMW and PS wording. P4a's deck implied them
+                but never wrote them out</span
+              >
+            </p>
+          </div>
+        </div>
+        <p class="src">
+          Problem wording from our P4a deck: "Listening stats are usually
+          consumed alone. Group music conversations stay informal."
+        </p>
+      </section>
+
+      <!-- 3 prompts -->
+      <section class="slide green" data-n="3">
+        <p class="kicker">How we ideated</p>
+        <h2>Five prompts to brainstorm around</h2>
+        <ol class="prompts">
+          <li>How might we make a friend's taste a puzzle the group solves?</li>
+          <li>
+            How might we turn listening history into a reason to text the group?
+          </li>
+          <li>
+            How might we make Wrapped happen with friends instead of alone?
+          </li>
+          <li>How might we let friends discover music through each other?</li>
+          <li>How might we make music taste something you compete on?</li>
+        </ol>
+        <p style="font-size: 19px; margin-top: 22px">
+          Methods from class: round robin, Crazy 8s, extreme scenarios,
+          storyboarding.
+          <span class="need"
+            >Team: say which ones we ran, when, and who was there</span
+          >
+        </p>
+        <span class="star"></span>
+      </section>
+
+      <!-- 4 board 1 -->
+      <section class="slide ink" data-n="4">
+        <p class="kicker">The board, part 1 · games and quizzes</p>
+        <h2 style="font-size: 58px; margin-bottom: 22px">Get weird</h2>
+        <div class="board">
+          <div class="note top">
+            <b>Quiz</b>Live party quiz built from everyone's real Spotify stats
+          </div>
+          <div class="note">
+            <b>Quiz</b>"Whose song is this?" plays a 5-second clip, guess the
+            friend
+          </div>
+          <div class="note top">
+            <b>Habit</b>One question a day dropped in the group chat, with
+            streaks
+          </div>
+          <div class="note">
+            <b>Game</b>Music Guess Who: flip down friends by taste clues
+          </div>
+          <div class="note">
+            <b>Game</b>Draft night: each friend drafts artists, scores by real
+            plays all month
+          </div>
+          <div class="note">
+            <b>Game</b>Fantasy league for artists your friends are about to blow
+            up on
+          </div>
+          <div class="note">
+            <b>Game</b>Higher or lower: who played Drake more this month?
+          </div>
+          <div class="note">
+            <b>Game</b>Bingo card of the group's top songs at a party
+          </div>
+          <div class="note">
+            <b>Extreme</b>Your aux privileges are earned by quiz score
+          </div>
+          <div class="note">
+            <b>Extreme</b>A courtroom: the group votes on your guilty-pleasure
+            song
+          </div>
+          <div class="note">
+            <b>Road trip</b>Each exit, the car guesses whose song comes next
+          </div>
+          <div class="note">
+            <b>Party</b>A TV mode so the whole room plays on one screen
+          </div>
+          <div class="note">
+            <b>Duel</b>1v1 taste duel, loser makes the winner a playlist
+          </div>
+          <div class="note">
+            <b>Season</b>Weekly room, season standings all semester
+          </div>
+          <div class="note">
+            <b>Cards</b>End-of-game cards: Most Loyal, Biggest Song Looper
+          </div>
+        </div>
+        <p class="src">
+          <span class="need"
+            >Starter board. Team: add everyone's own notes and photos of the
+            real board</span
+          >
+        </p>
+      </section>
+
+      <!-- 5 board 2 -->
+      <section class="slide ink" data-n="5">
+        <p class="kicker">The board, part 2 · sharing, discovery, identity</p>
+        <h2 style="font-size: 58px; margin-bottom: 22px">Get wacky</h2>
+        <div class="board">
+          <div class="note top">
+            <b>Map</b>A taste map of the friend group: who overlaps, who's an
+            outlier
+          </div>
+          <div class="note">
+            <b>Score</b>Compatibility score between two friends' listening
+          </div>
+          <div class="note">
+            <b>Playlist</b>Auto playlist of only the songs the whole group loves
+          </div>
+          <div class="note">
+            <b>Wrapped</b>Group Wrapped every month, made to post
+          </div>
+          <div class="note">
+            <b>Discovery</b>Swap week: listen only to a friend's top 10 and rate
+            it
+          </div>
+          <div class="note">
+            <b>Discovery</b>Recommend a song, earn points when your friend saves
+            it
+          </div>
+          <div class="note">
+            <b>Identity</b>Your "music persona" card, voted by friends, not the
+            algorithm
+          </div>
+          <div class="note">
+            <b>Live</b>See what friends are playing right now on a shared screen
+          </div>
+          <div class="note">
+            <b>Dating</b>Match people at a party by taste overlap
+          </div>
+          <div class="note">
+            <b>Long distance</b>Friends at other schools play a weekly round
+          </div>
+          <div class="note">
+            <b>Concert</b>Who in the group should go to which show together
+          </div>
+          <div class="note">
+            <b>Extreme</b>A taste "horoscope" for the week from your plays
+          </div>
+          <div class="note">
+            <b>Physical</b>A printed trading card of your top artist stats
+          </div>
+          <div class="note">
+            <b>Campus</b>Dorm floor vs dorm floor listening battle
+          </div>
+          <div class="note">
+            <b>Archive</b>Time capsule: guess what you were looping a year ago
+          </div>
+        </div>
+        <p class="src">
+          <span class="need"
+            >Starter board. Team: add everyone's own notes and photos of the
+            real board</span
+          >
+        </p>
+      </section>
+
+      <!-- 6 affinity -->
+      <section class="slide red" data-n="6">
+        <p class="kicker">Sorting the board · affinity diagram</p>
+        <h2>Four clusters</h2>
+        <div class="three" style="grid-template-columns: repeat(4, 1fr)">
+          <div class="card">
+            <h3>Play live</h3>
+            <p>Party quiz, TV mode, bingo, road trip guessing, duels</p>
+          </div>
+          <div class="card">
+            <h3>Come back daily</h3>
+            <p>Daily question, streaks, seasons, fantasy draft</p>
+          </div>
+          <div class="card">
+            <h3>See the group</h3>
+            <p>Taste map, compatibility, group Wrapped, shared playlist</p>
+          </div>
+          <div class="card">
+            <h3>Discover</h3>
+            <p>Swap week, recommend and earn, concert matching</p>
+          </div>
+        </div>
+        <p style="margin-top: 34px">
+          We pulled one strong option from each of the first three clusters.
+          Discovery ideas mostly needed one of the other three to exist first.
+        </p>
+        <span class="star"></span>
+      </section>
+
+      <!-- 7 effort impact -->
+      <section class="slide blue" data-n="7">
+        <p class="kicker">Effort / impact scale</p>
+        <h2 style="font-size: 60px; margin-bottom: 6px">
+          What's worth building
+        </h2>
+        <div class="ei">
+          <span
+            class="ax"
+            style="
+              left: -60px;
+              top: -6px;
+              transform: rotate(-90deg) translateX(-100%);
+              transform-origin: 0 0;
+            "
+            >Impact</span
+          >
+          <span class="ax" style="right: 0; bottom: -34px">Effort</span>
+          <span class="q" style="left: 16px; top: 12px"
+            >High impact, low effort</span
+          >
+          <span class="q" style="right: 16px; top: 12px"
+            >High impact, high effort</span
+          >
+          <span class="dot top" style="left: 120px; top: 70px"
+            >Live party quiz</span
+          >
+          <span class="dot top" style="left: 330px; top: 150px"
+            >Daily drop</span
+          >
+          <span class="dot top" style="left: 700px; top: 110px">Taste map</span>
+          <span class="dot" style="left: 200px; top: 300px">Group Wrapped</span>
+          <span class="dot" style="left: 880px; top: 260px">TV mode</span>
+          <span class="dot" style="left: 520px; top: 360px"
+            >Compatibility score</span
+          >
+          <span class="dot" style="left: 960px; top: 400px"
+            >Live listening screen</span
+          >
+          <span class="dot" style="left: 90px; top: 430px">Bingo card</span>
+          <span class="dot" style="left: 640px; top: 230px">Fantasy draft</span>
+        </div>
+        <p class="src">
+          <span class="need"
+            >Draft placement. Team: re-place these by dot vote</span
+          >
+        </p>
+      </section>
+
+      <!-- 8 option A -->
+      <section class="slide green" data-n="8">
+        <p class="kicker">Top 3 · option A · play live</p>
+        <h2>Live party quiz</h2>
+        <div class="cols">
+          <div>
+            <p class="big" style="font-size: 32px">
+              Friends join a private room, connect Spotify, and answer questions
+              only friends could get right.
+            </p>
+          </div>
+          <div class="card">
+            <ul class="plain">
+              <li>"Whose #1 song this month is Espresso?"</li>
+              <li>
+                Points for right answers, plus points when friends guess you
+              </li>
+              <li>Ends on game cards: Most Loyal Listener, Top 0.5%</li>
+              <li>Best for: a dorm hang, a party, a road trip</li>
+            </ul>
+          </div>
+        </div>
+        <span class="star"></span>
+      </section>
+
+      <!-- 9 option B -->
+      <section class="slide red" data-n="9">
+        <p class="kicker">Top 3 · option B · come back daily</p>
+        <h2>Daily drop</h2>
+        <div class="cols">
+          <div>
+            <p class="big" style="font-size: 32px">
+              One question a day lands in the group chat. Everyone answers on
+              their own time, and streaks keep the group playing.
+            </p>
+          </div>
+          <div class="card">
+            <ul class="plain">
+              <li>Like Wordle, but the answer is one of your friends</li>
+              <li>No one has to be in the same room</li>
+              <li>Weekly standings in the chat</li>
+              <li>Best for: long-distance friends, busy weeks</li>
+            </ul>
+          </div>
+        </div>
+        <span class="star"></span>
+      </section>
+
+      <!-- 10 option C -->
+      <section class="slide gold" data-n="10">
+        <p class="kicker">Top 3 · option C · see the group</p>
+        <h2>Taste map</h2>
+        <div class="cols">
+          <div>
+            <p class="big" style="font-size: 32px">
+              A living map of the friend group's music: who overlaps, who's the
+              outlier, and a playlist of the songs everyone shares.
+            </p>
+          </div>
+          <div class="card" style="background: rgba(0, 0, 0, 0.1)">
+            <ul class="plain">
+              <li>Compatibility score for every pair of friends</li>
+              <li>Updates each month like a group Wrapped</li>
+              <li>Made to screenshot and post</li>
+              <li>Best for: end of semester, new friend groups</li>
+            </ul>
+          </div>
+        </div>
+        <span class="star" style="color: var(--ink)"></span>
+      </section>
+
+      <!-- 11 feedback -->
+      <section class="slide cream" data-n="11">
+        <p class="kicker">Feedback on our top 3</p>
+        <h2>What people told us</h2>
+        <div class="three">
+          <div class="card" style="background: rgba(33, 74, 139, 0.08)">
+            <h3>Live quiz</h3>
+            <p>
+              <span class="need"
+                >Who we asked, and their reaction, in their words</span
+              >
+            </p>
+          </div>
+          <div class="card" style="background: rgba(33, 74, 139, 0.08)">
+            <h3>Daily drop</h3>
+            <p>
+              <span class="need"
+                >Who we asked, and their reaction, in their words</span
+              >
+            </p>
+          </div>
+          <div class="card" style="background: rgba(33, 74, 139, 0.08)">
+            <h3>Taste map</h3>
+            <p>
+              <span class="need"
+                >Who we asked, and their reaction, in their words</span
+              >
+            </p>
+          </div>
+        </div>
+        <p style="margin-top: 30px; font-size: 21px">
+          Rubric: get feedback on the top 3 before selecting. Fastest real
+          source: 3 to 5 friends play the prototype at
+          playsoundcheck.up.railway.app, then pick which of the three they'd
+          open again.
+        </p>
+      </section>
+
+      <!-- 12 selection grid -->
+      <section class="slide ink" data-n="12">
+        <p class="kicker">Selection · scored 1 to 5 on the class criteria</p>
+        <h2 style="font-size: 60px; margin-bottom: 18px">Picking a winner</h2>
+        <table class="grid">
+          <tr>
+            <th>Option</th>
+            <th>Feasibility</th>
+            <th>Novelty</th>
+            <th>Impact</th>
+            <th>Relevance</th>
+            <th>Fits our HMW</th>
+            <th>Total</th>
+          </tr>
+          <tr class="win">
+            <td>A · Live party quiz</td>
+            <td class="n">5</td>
+            <td class="n">4</td>
+            <td class="n">4</td>
+            <td class="n">5</td>
+            <td class="n">5</td>
+            <td class="n">23</td>
+          </tr>
+          <tr>
+            <td>B · Daily drop</td>
+            <td class="n">4</td>
+            <td class="n">3</td>
+            <td class="n">3</td>
+            <td class="n">4</td>
+            <td class="n">4</td>
+            <td class="n">18</td>
+          </tr>
+          <tr>
+            <td>C · Taste map</td>
+            <td class="n">3</td>
+            <td class="n">2</td>
+            <td class="n">3</td>
+            <td class="n">3</td>
+            <td class="n">3</td>
+            <td class="n">14</td>
+          </tr>
+        </table>
+        <div class="three" style="margin-top: 26px">
+          <p style="font-size: 19px">
+            <b>Feasibility:</b> A already runs as a prototype. Spotify's
+            Development Mode caps sign-ins at 5 accounts, so A added quick picks
+            and data uploads as other ways in.
+          </p>
+          <p style="font-size: 19px">
+            <b>Novelty:</b> Wrapped is alone and Spotify Blend already makes
+            shared playlists, which hurts C. Live trivia exists, but not built
+            from your friends' own data.
+          </p>
+          <p style="font-size: 19px">
+            <b>Impact:</b> A starts a conversation in the room. B is lighter. C
+            is something you look at, not do.
+          </p>
+        </div>
+        <p class="src">
+          <span class="need"
+            >Draft scores. Team: each member scores, then we average</span
+          >
+        </p>
+      </section>
+
+      <!-- 13 final -->
+      <section class="slide blue" data-n="13">
+        <p class="kicker">Our selection</p>
+        <h2>SoundCheck, the live party quiz</h2>
+        <div class="cols">
+          <div>
+            <p class="kicker">How it answers the HMW</p>
+            <p>
+              It takes each friend's own listening history and turns it into
+              questions the group answers together, out loud, in one room.
+            </p>
+          </div>
+          <div>
+            <p class="kicker">How it answers the PS</p>
+            <p>
+              Stats stop being something you look at alone. Every round reveals
+              something about a friend, and the cards at the end give the group
+              a story to argue about.
+            </p>
+          </div>
+        </div>
+        <p style="margin-top: 20px; font-size: 21px">
+          What we kept from the others: B's season standings (a room that keeps
+          working each week) and C's shareable results card.
+        </p>
+        <span class="star"></span>
+      </section>
+
+      <!-- 14 contributions -->
+      <section class="slide green" data-n="14">
+        <p class="kicker">Who did what</p>
+        <h2>Team contributions</h2>
+        <div
+          class="three"
+          style="grid-template-columns: repeat(5, 1fr); gap: 18px"
+        >
+          <div class="card">
+            <h3>Sam</h3>
+            <p>Design (digital), slides</p>
+            <p><span class="need">4b work</span></p>
+          </div>
+          <div class="card">
+            <h3>Maia</h3>
+            <p>Dev and tech, organization</p>
+            <p><span class="need">4b work</span></p>
+          </div>
+          <div class="card">
+            <h3>Mia</h3>
+            <p>Design, sketches</p>
+            <p><span class="need">4b work</span></p>
+          </div>
+          <div class="card">
+            <h3>Caleb</h3>
+            <p>Generalist</p>
+            <p>Built the working prototype at playsoundcheck.up.railway.app</p>
+          </div>
+          <div class="card">
+            <h3>Kaylie</h3>
+            <p>Writing and research</p>
+            <p><span class="need">4b work</span></p>
+          </div>
+        </div>
+        <p style="margin-top: 28px; font-size: 21px">
+          Roles from our P4a team norms. Everything is documented in the team
+          Drive, P4b folder.
+        </p>
+        <span class="star"></span>
+      </section>
+    </main>
+    <script src="deck.js"></script>
+  </body>
+</html>
