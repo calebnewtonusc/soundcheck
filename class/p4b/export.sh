@@ -40,6 +40,10 @@ got=$(ls "$OUT"/slide-*.png 2>/dev/null | wc -l | tr -d ' ')
   for f in "$OUT"/slide-*.png; do echo "<img src=\"file://$f\">"; done
   echo '</body></html>'
 } > "$OUT/pages.html"
+# The wait below polls for a non-empty PDF, so an old one ends it at once and
+# leaves the stale file in place (2026-11-02: the fixed Sam/Mia credits never
+# rendered until this line went in).
+rm -f SoundCheck-P4b.pdf
 "$C" --headless=new --user-data-dir="$OUT/print" \
   --disable-gpu --no-first-run --no-pdf-header-footer --allow-file-access-from-files \
   --print-to-pdf="$PWD/SoundCheck-P4b.pdf" "file://$OUT/pages.html" >/dev/null 2>&1 &
