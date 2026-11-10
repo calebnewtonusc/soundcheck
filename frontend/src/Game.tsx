@@ -89,8 +89,8 @@ function Quiz({ state, isHost, onAnswer, onNext, onReact }: Props) {
         tone="blue"
         className="flex min-h-[calc(100dvh-24px)] items-center justify-center p-3 pb-32 sm:min-h-[calc(100dvh-48px)] sm:p-[3.5%] lg:px-[6%] lg:pb-[3.5%]"
       >
-        <div className="grid w-full overflow-hidden rounded-[22px] bg-app text-paper lg:grid-cols-[minmax(0,1fr)_290px]">
-          <div className="halftone flex flex-col gap-6 p-5 sm:gap-7 sm:p-9">
+        <div className="grid w-full grid-cols-[minmax(0,1fr)] overflow-hidden rounded-[22px] bg-app text-paper lg:grid-cols-[minmax(0,1fr)_290px]">
+          <div className="halftone flex min-w-0 flex-col gap-6 p-5 sm:gap-7 sm:p-9">
             <div className="flex items-center gap-4 font-mono text-[11px] tracking-[0.08em] text-mute">
               <span>
                 {pad(q.index + 1)} / {pad(q.total)}

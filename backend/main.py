@@ -574,7 +574,8 @@ async def pick(request: Request, code: str, body: SongPick):
     _auth(room, body.pid, body.key)
     # Art is shown to every phone in the room, so only the music hosts'.
     image = body.image if body.image and body.image.startswith(IMAGE_HOST) else None
-    track = {"name": body.name, "artist": body.artist, "image": image, "id": body.id}
+    tid = body.id if body.id and body.id.isalnum() else None  # a junk id gets looked up like a missing one
+    track = {"name": body.name, "artist": body.artist, "image": image, "id": tid}
     q = room.questions[room.qi] if room.phase == "question" and room.questions else None
     open_pick = (q is not None and q.kind == "song" and room.step == "pick"
                  and body.pid not in q.subjects and body.pid not in room.song_picks)

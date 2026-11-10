@@ -103,8 +103,8 @@ export function SongRound({
         tone="mustard"
         className="flex min-h-[calc(100dvh-24px)] items-center justify-center p-3 pb-32 sm:min-h-[calc(100dvh-48px)] sm:p-[3.5%] lg:px-[6%] lg:pb-[3.5%]"
       >
-        <div className="grid w-full overflow-hidden rounded-[22px] bg-app text-paper lg:grid-cols-[minmax(0,1fr)_290px]">
-          <div className="halftone flex flex-col gap-6 p-5 sm:gap-7 sm:p-9">
+        <div className="grid w-full grid-cols-[minmax(0,1fr)] overflow-hidden rounded-[22px] bg-app text-paper lg:grid-cols-[minmax(0,1fr)_290px]">
+          <div className="halftone flex min-w-0 flex-col gap-6 p-5 sm:gap-7 sm:p-9">
             <div className="flex items-center gap-3 font-mono text-[11px] tracking-[0.08em] text-mute sm:gap-4">
               <span>
                 {pad(q.index + 1)} / {pad(q.total)}
@@ -557,7 +557,7 @@ function Reveal({
               {(c.voters.length > 0 || c.notes.length > 0) && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {c.voters.length > 0 && (
-                    <span className="rounded-full border border-line px-2.5 py-1 font-mono text-[11px] text-paper/80">
+                    <span className="max-w-full rounded-[12px] border border-line px-2.5 py-1 font-mono text-[11px] leading-snug text-paper/80 [overflow-wrap:anywhere]">
                       Votes:{" "}
                       {c.voters.map((v) => byId[v]?.name ?? "?").join(", ")}
                     </span>
@@ -565,7 +565,7 @@ function Reveal({
                   {c.notes.map((n) => (
                     <span
                       key={n}
-                      className="rounded-full bg-mustard px-2.5 py-1 font-mono text-[11px] text-ink"
+                      className="max-w-full rounded-[12px] bg-mustard px-2.5 py-1 font-mono text-[11px] leading-snug text-ink [overflow-wrap:anywhere]"
                     >
                       {n}
                     </span>
