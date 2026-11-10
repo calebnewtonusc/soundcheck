@@ -110,8 +110,7 @@ export function SongRound({
                 {pad(q.index + 1)} / {pad(q.total)}
               </span>
               <span className="rounded-full bg-mustard px-2.5 py-1 text-ink">
-                SOUNDTRACK /{" "}
-                {step === "pick" ? "PICK" : step === "vote" ? "VOTE" : "REVEAL"}
+                SOUNDTRACK
               </span>
               <progress
                 className="timer flex-1"
@@ -154,6 +153,8 @@ export function SongRound({
                 )}
               </div>
             </div>
+
+            <Steps step={step} judged={!!judge} />
 
             {step === "pick" &&
               (q.about_me ? (
@@ -215,6 +216,46 @@ export function SongRound({
         </Button>
       </div>
     </Page>
+  );
+}
+
+/** The round in three steps, current one lit, so nobody has to ask what's happening. */
+function Steps({ step, judged }: { step: string; judged: boolean }) {
+  const steps = [
+    { id: "pick", title: "Pick", line: "Tap the song that fits the moment" },
+    {
+      id: "vote",
+      title: "Vote",
+      line: judged
+        ? "The judge picks the best one"
+        : "Vote for the best one. Names hidden",
+    },
+    { id: "done", title: "Reveal", line: "See whose song was whose" },
+  ];
+  const at = steps.findIndex((s) => s.id === step);
+  return (
+    <ol className="grid grid-cols-3 gap-2" aria-label="How this round works">
+      {steps.map((s, i) => (
+        <li
+          key={s.id}
+          aria-current={i === at ? "step" : undefined}
+          className={`rounded-[4px] border px-3 py-2.5 ${
+            i === at
+              ? "border-mustard bg-mustard text-ink"
+              : i < at
+                ? "border-line text-paper/45"
+                : "border-line text-paper/75"
+          }`}
+        >
+          <span className="block font-mono text-[11px] tracking-[0.08em]">
+            {pad(i + 1)} {s.title.toUpperCase()}
+          </span>
+          <span className="mt-1 hidden font-ui text-[13px] leading-snug sm:block">
+            {s.line}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -319,7 +360,7 @@ function Picker({
     <div className="flex flex-col gap-4">
       <div>
         <p className="mb-2 font-mono text-[11px] tracking-[0.08em] text-mute">
-          FROM YOUR LISTENING
+          YOUR TOP SONGS, TAP ONE
         </p>
         {deck.length ? (
           <ul className="grid gap-2 sm:grid-cols-2" aria-label="Your top songs">
