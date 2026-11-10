@@ -78,7 +78,7 @@ def _track(t: dict) -> dict:
     album = t.get("album") or {}
     date = album.get("release_date") or ""
     return {"name": t.get("name", "?"), "artist": artists[0].get("name", "?"), "image": _image(album.get("images")),
-            "year": int(date[:4]) if date[:4].isdigit() else None}
+            "year": int(date[:4]) if date[:4].isdigit() else None, "id": t.get("id")}
 
 
 def _artist(a: dict) -> dict:

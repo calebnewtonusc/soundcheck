@@ -11,7 +11,10 @@ SoundCheck turns a group's Spotify listening history into a party quiz. Everyone
 3. The host picks a mode (Classic, Wrapped, Road trip, Decades, Genres), a length (5, 8 or 12) and optionally team mode or AI wording.
 4. Questions come in two shapes: pick a friend ("Who's the biggest Drake fan in the room?") or pick an answer ("What's the last song Kaylie played?"). Right answers score 100 plus up to 50 for speed, and whoever a question is about gets 50 for every friend who got them right.
 5. After each reveal everyone can react (CALLED IT, NO WAY, SUS, RESPECT). The report shows the four game cards, final scores, team results and a story-sized share card.
-6. Rematch keeps the room, skips questions the group has already seen, and updates the season table.
+6. The game ends on three Soundtrack rounds. A moment drops ("PCH at sunset, windows down"), everyone picks a song from their own top songs (or searches Spotify for any song), and the room votes on the picks without knowing whose is whose. Each vote is 100. The reveal says who picked what, plays the winner, and calls out a pick nobody else in the room listens to (deep cut, +50), two picks from the same artist (taste twins), and how often the picker has played it lately. The last round is written from the group's own listening ("Pick Sam's walkout song, he's been deep in alternative r&b"): that friend sits out picking and judges alone, and their vote is worth 250. The host can turn the Soundtrack finale off in the lobby.
+7. Rematch keeps the room, skips questions and moments the group has already seen, and updates the season table.
+
+Soundtrack came out of five user interviews on 2026-11-09. People liked it more than the quiz 3 to 2, and the quiz's main knock was "a do one time and then like have an enjoyable night" game. Picking from your own songs fixes the two worries about it ("people don't always have something in their brain for this kind of thing", and a song nobody knows "ruins the vibe"), and anonymous picks bring the quiz's "wait, THAT'S yours?" reveal into every round.
 
 Your taste is saved on your phone, so the next room is one tap ("Join as Caleb").
 

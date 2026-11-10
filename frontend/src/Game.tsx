@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { REACTIONS, type Option, type Player, type RoomState } from "./api";
+import { REACTIONS, type Option, type Player, type RoomState, type Track } from "./api";
+import { SongRound } from "./Soundtrack";
 import { Art, Avatar, Button, Page, Slide, Star, Wordmark } from "./ui";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -8,6 +9,7 @@ const STEPS = [
   { id: "songs", label: "Top songs" },
   { id: "artists", label: "Top artists" },
   { id: "genre", label: "Genre + habits" },
+  { id: "soundtrack", label: "Soundtrack" },
   { id: "report", label: "Report" },
 ];
 
@@ -15,11 +17,17 @@ type Props = {
   state: RoomState;
   isHost: boolean;
   onAnswer: (id: string) => void;
+  onPick: (t: Track) => void;
   onNext: () => void;
   onReact: (label: string) => void;
 };
 
-export function Game({ state, isHost, onAnswer, onNext, onReact }: Props) {
+export function Game(props: Props) {
+  if (props.state.question?.kind === "song") return <SongRound {...props} />;
+  return <Quiz {...props} />;
+}
+
+function Quiz({ state, isHost, onAnswer, onNext, onReact }: Props) {
   const q = state.question;
   const [picked, setPicked] = useState<string | null>(null);
   const index = q?.index;
@@ -350,7 +358,9 @@ function Footer({
   );
 }
 
-function Sidebar({
+export { pad };
+
+export function Sidebar({
   state,
   category,
   cta,

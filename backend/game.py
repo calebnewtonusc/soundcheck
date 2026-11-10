@@ -5,10 +5,12 @@ tracks and artists over the last 4 weeks (short) and all time (long),
 plus their last 50 plays with the local hour each was played. Tokens never
 reach this module.
 
-Two question shapes:
+Three question shapes:
   who   - options are the players ("Whose #1 song this month is Espresso?")
   pick  - options are songs, artists or genres about one player
           ("Which of these is actually in Maia's top 5 this month?")
+  song  - Soundtrack: everyone picks a song for a moment from their own
+          listening, then the room votes on the anonymous picks
 """
 
 from __future__ import annotations
@@ -22,6 +24,8 @@ import time
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from typing import Callable
+
+from . import soundtrack as st_round
 
 QUESTION_SECONDS = 20
 LENGTHS = (5, 8, 12)
@@ -131,7 +135,7 @@ def stats(profile: dict) -> dict:
 @dataclass
 class Question:
     category: str
-    kind: str  # "who" | "pick"
+    kind: str  # "who" | "pick" | "song"
     text: str
     subjects: list[str]  # players the question is about; they sit it out
     correct: list[str]  # option ids (player ids for "who")
@@ -571,6 +575,12 @@ class Room:
     bot_plan: dict[str, list] = field(default_factory=dict)
     last_points: dict[str, int] = field(default_factory=dict)
     cards: list[dict] = field(default_factory=list)
+    soundtrack: bool = True  # end the game on Soundtrack rounds
+    step: str = ""  # a song question runs "pick" then "vote"
+    song_picks: dict[str, dict] = field(default_factory=dict)  # pid -> track
+    song_options: list[dict] = field(default_factory=list)  # anonymous vote options
+    song_owner: dict[str, str] = field(default_factory=dict)  # option id -> pid
+    song_result: dict = field(default_factory=dict)  # what the reveal shows
     touched: float = field(default_factory=time.time)
     version: int = 0
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False, compare=False)
@@ -629,7 +639,8 @@ class Room:
         self.version += 1
 
     @locked
-    def settings(self, length: int | None = None, mode: str | None = None, teams: bool | None = None, ai: bool | None = None) -> None:
+    def settings(self, length: int | None = None, mode: str | None = None, teams: bool | None = None, ai: bool | None = None,
+                 soundtrack: bool | None = None) -> None:
         if self.phase != "lobby":
             raise ValueError("Change settings between games.")
         if length is not None:
@@ -646,6 +657,8 @@ class Room:
                 self._split_teams()
         if ai is not None:
             self.ai = ai
+        if soundtrack is not None:
+            self.soundtrack = soundtrack
         self.version += 1
 
     def _split_teams(self, shuffle: bool = False) -> None:
@@ -700,7 +713,17 @@ class Room:
             )
         if not qs:
             raise ValueError("Not enough listening history to build questions yet.")
+        if self.soundtrack:
+            qs = qs + self._song_questions(rng or random.Random())
         return qs
+
+    def _song_questions(self, rng: random.Random) -> list[Question]:
+        st = {pid: stats(p.profile) for pid, p in self.players.items()}
+        names = {pid: p.name for pid, p in self.players.items()}
+        out = []
+        for pr in st_round.prompts(st, names, rng, skip=set(self.asked)):
+            out.append(Question("songs", "song", pr.text, [pr.judge] if pr.judge else [], [], pr.hint, pr.image))
+        return out
 
     @locked
     def begin(self, questions: list[Question]) -> None:
@@ -721,12 +744,22 @@ class Room:
     def _option_ids(self, q: Question) -> list[str]:
         return list(self.players) if q.kind == "who" else [o["id"] for o in q.options]
 
+    def _secs(self) -> int:
+        q = self.questions[self.qi] if self.questions else None
+        if q and q.kind == "song":
+            return st_round.PICK_SECONDS if self.step == "pick" else st_round.VOTE_SECONDS
+        return self.seconds
+
     def _open_question(self) -> None:
         self.phase = "question"
         self.started_at = time.time()
         self.answers = {}
         self.last_points = {}
         q = self.questions[self.qi]
+        if q.kind == "song":
+            self._open_pick(q)
+            return
+        self.step = ""
         ids = self._option_ids(q)
         self.bot_plan = {}
         for pid, p in self.players.items():
@@ -736,9 +769,152 @@ class Room:
                 self.bot_plan[pid] = [pick, self.started_at + random.uniform(2.5, min(9, self.seconds - 2))]
         self.version += 1
 
+    # --- Soundtrack -------------------------------------------------------
+    def _pickers(self, q: Question) -> list[str]:
+        return [pid for pid in self.players if pid not in q.subjects]
+
+    def _voters(self, q: Question) -> list[str]:
+        # A judge prompt is theirs alone to decide; otherwise everyone votes,
+        # just never for their own pick.
+        if q.subjects:
+            return [s for s in q.subjects if s in self.players]
+        return list(self.players)
+
+    def _open_pick(self, q: Question) -> None:
+        self.step = "pick"
+        self.song_picks = {}
+        self.song_options = []
+        self.song_owner = {}
+        self.song_result = {}
+        self.bot_plan = {}
+        for pid in self._pickers(q):
+            p = self.players[pid]
+            if p.is_bot:
+                d = st_round.deck(p.profile)
+                if d:
+                    self.bot_plan[pid] = [random.choice(d), self.started_at + random.uniform(3, 12)]
+        self.version += 1
+
+    @locked
+    def pick_song(self, pid: str, track: dict) -> None:
+        self._tick()
+        q = self.questions[self.qi] if self.phase == "question" else None
+        if not q or q.kind != "song" or self.step != "pick":
+            raise ValueError("Picking is closed.")
+        if pid in q.subjects:
+            raise ValueError("Your friends are picking for you. Sit tight.")
+        if pid not in self.players:
+            raise ValueError("You're not in this room.")
+        if pid in self.song_picks:
+            raise ValueError("You already picked.")
+        name = str(track.get("name") or "").strip()[:200]
+        artist = str(track.get("artist") or "").strip()[:200]
+        if not name or not artist:
+            raise ValueError("Pick a song.")
+        image = track.get("image")
+        tid = track.get("id")
+        self.song_picks[pid] = {"name": name, "artist": artist,
+                                "image": image if isinstance(image, str) and image.startswith("https://") else None,
+                                "id": tid if isinstance(tid, str) and tid.isalnum() and len(tid) < 40 else None}
+        self.version += 1
+        self._tick()
+
+    def _open_vote(self) -> None:
+        q = self.questions[self.qi]
+        if not self.song_picks:
+            self._reveal_song()
+            return
+        self.step = "vote"
+        self.started_at = time.time()
+        self.answers = {}
+        items = list(self.song_picks.items())
+        random.shuffle(items)
+        self.song_options = []
+        self.song_owner = {}
+        for pid, t in items:
+            oid = st_round.option_id()
+            self.song_owner[oid] = pid
+            self.song_options.append({"id": oid, "label": t["name"], "sub": t["artist"], "image": t.get("image"),
+                                      "track_id": t.get("id")})
+        self.bot_plan = {}
+        for pid in self._voters(q):
+            p = self.players[pid]
+            choices = [o["id"] for o in self.song_options if self.song_owner[o["id"]] != pid]
+            if p.is_bot and choices:
+                self.bot_plan[pid] = [random.choice(choices), self.started_at + random.uniform(2.5, 9)]
+        self.version += 1
+
+    def _tick_song(self, now: float, q: Question) -> None:
+        changed = False
+        if self.step == "pick":
+            for pid, (track, at) in list(self.bot_plan.items()):
+                if now >= at and pid not in self.song_picks:
+                    self.song_picks[pid] = track
+                    changed = True
+            if all(pid in self.song_picks for pid in self._pickers(q)) or now - self.started_at >= st_round.PICK_SECONDS:
+                self._open_vote()
+            elif changed:
+                self.version += 1
+            return
+        for pid, (pick, at) in list(self.bot_plan.items()):
+            if now >= at and pid not in self.answers:
+                self.answers[pid] = [pick, at]
+                changed = True
+        voters = [v for v in self._voters(q) if any(self.song_owner[o] != v for o in self.song_owner)]
+        if all(v in self.answers for v in voters) or now - self.started_at >= st_round.VOTE_SECONDS:
+            self._reveal_song()
+        elif changed:
+            self.version += 1
+
+    def _reveal_song(self) -> None:
+        q = self.questions[self.qi]
+        votes: Counter = Counter()
+        voters: dict[str, list[str]] = {}
+        for pid, (oid, _) in self.answers.items():
+            votes[oid] += 1
+            voters.setdefault(oid, []).append(pid)
+        each = st_round.JUDGE_POINTS if q.subjects else st_round.VOTE_POINTS
+        points: dict[str, int] = {}
+        cards = []
+        top = max(votes.values()) if votes else 0
+        artists = Counter(o["sub"].lower() for o in self.song_options)
+        for o in self.song_options:
+            owner = self.song_owner[o["id"]]
+            p = self.players.get(owner)
+            n = votes[o["id"]]
+            deep = bool(n) and not any(st_round.listens_to(x.profile, o["sub"]) for pid, x in self.players.items() if pid != owner)
+            pts = n * each + (st_round.DEEP_CUT_POINTS if deep else 0)
+            if pts:
+                points[owner] = points.get(owner, 0) + pts
+            notes = []
+            plays = st_round.plays(p.profile, {"name": o["label"], "artist": o["sub"]}) if p else 0
+            if plays >= 2:
+                notes.append(f"{p.name} has played this {plays} times lately")
+            if deep:
+                notes.append("Deep cut: nobody else here listens to them")
+            if artists[o["sub"].lower()] > 1:
+                notes.append(f"Taste twins: two of you went {o['sub']}")
+            cards.append({**o, "owner": owner, "votes": n, "voters": voters.get(o["id"], []),
+                          "winner": bool(n) and n == top, "points": pts, "notes": notes})
+        cards.sort(key=lambda c: -c["votes"])
+        for pid, pts in points.items():
+            if pid in self.players:
+                self.players[pid].score += pts
+        q.correct = [c["id"] for c in cards if c["winner"]]
+        self.song_result = {"cards": cards, "judge": q.subjects[0] if q.subjects else None,
+                            "missed": [pid for pid in self._pickers(q) if pid not in self.song_picks]}
+        self.last_points = points
+        self.phase = "reveal"
+        self.step = ""
+        self.version += 1
+
     def _tick(self, now: float | None = None) -> None:
         now = now or time.time()
         if self.phase != "question":
+            return
+        q = self.questions[self.qi]
+        if q.kind == "song":
+            self._tick_song(now, q)
             return
         changed = False
         for pid, (pick, at) in list(self.bot_plan.items()):
@@ -762,6 +938,21 @@ class Room:
         if self.phase != "question":
             raise ValueError("Too late, answers are locked.")
         q = self.questions[self.qi]
+        if q.kind == "song":
+            if self.step != "vote":
+                raise ValueError("Pick your song first.")
+            if pid not in self._voters(q):
+                raise ValueError("The judge decides this one.")
+            if choice not in self.song_owner:
+                raise ValueError("That's not one of the picks.")
+            if self.song_owner[choice] == pid:
+                raise ValueError("You can't vote for your own pick.")
+            if pid in self.answers:
+                raise ValueError("You already voted.")
+            self.answers[pid] = [choice, time.time()]
+            self.version += 1
+            self._tick()
+            return
         if pid in q.subjects:
             raise ValueError("This one's about you. Sit tight.")
         if choice not in self._option_ids(q):
@@ -804,6 +995,13 @@ class Room:
     def next(self) -> None:
         self._tick()
         if self.phase == "question":
+            q = self.questions[self.qi]
+            if q.kind == "song":
+                if self.step == "pick":
+                    self._open_vote()
+                else:
+                    self._reveal_song()
+                return
             self._reveal()
             return
         if self.phase != "reveal":
@@ -850,6 +1048,11 @@ class Room:
         self.questions = []
         self.answers = {}
         self.cards = []
+        self.step = ""
+        self.song_picks = {}
+        self.song_options = []
+        self.song_owner = {}
+        self.song_result = {}
         self.version += 1
 
     # --- what one player is allowed to see --------------------------------
@@ -857,7 +1060,7 @@ class Room:
     def public_view(self) -> dict:
         """What someone holding only the code sees: enough to decide to join."""
         out = {"code": self.code, "phase": self.phase, "me": None, "host_id": None, "version": self.version,
-               "length": self.length, "mode": self.mode, "teams": self.teams, "ai": self.ai,
+               "length": self.length, "mode": self.mode, "teams": self.teams, "ai": self.ai, "soundtrack": self.soundtrack,
                "players": [{"id": p.id, "name": p.name, "avatar": p.avatar, "score": 0, "source": p.source, "bot": p.is_bot,
                             "streak": 0, "right": 0, "answered": False, "team": p.team}
                            for p in sorted(self.players.values(), key=lambda p: p.joined_at)]}
@@ -865,6 +1068,35 @@ class Room:
             season = self._season()
             out["season"] = {"games": season["games"], "table": season["table"][:1]}
         return out
+
+    def _song_view(self, q: Question, me: str | None) -> dict:
+        secs = self._secs()
+        voting = self.step == "vote"
+        if self.phase == "reveal":
+            waiting = 0
+        elif voting:
+            voters = self._voters(q)
+            waiting = sum(1 for v in voters if v not in self.answers)
+        else:
+            waiting = sum(1 for pid in self._pickers(q) if pid not in self.song_picks)
+        mine = self.answers.get(me) if me else None
+        me_p = self.players.get(me) if me else None
+        mine_opt = next((o for o, pid in self.song_owner.items() if pid == me), None)
+        return {
+            "index": self.qi, "total": len(self.questions), "category": q.category, "kind": "song",
+            "text": q.text, "image": q.image, "hint": q.explain,
+            "step": self.step or "done",
+            "judge": q.subjects[0] if q.subjects else None,
+            "options": [{**o, "mine": o["id"] == mine_opt} for o in self.song_options] if voting or self.phase == "reveal" else [],
+            "deck": st_round.deck(me_p.profile) if me_p and self.step == "pick" and me not in q.subjects else [],
+            "my_pick": self.song_picks.get(me) if me else None,
+            "can_vote": bool(me) and voting and me in self._voters(q),
+            "seconds": secs,
+            "time_left": max(0, round(secs - (time.time() - self.started_at))),
+            "about_me": me in q.subjects,
+            "my_answer": mine[0] if mine else None,
+            "waiting_on": waiting,
+        }
 
     @locked
     def view(self, me: str | None) -> dict:
@@ -879,15 +1111,19 @@ class Room:
             "mode": self.mode,
             "teams": self.teams,
             "ai": self.ai,
+            "soundtrack": self.soundtrack,
             "me": me,
             "players": [
                 {"id": p.id, "name": p.name, "score": p.score, "source": p.source, "bot": p.is_bot,
-                 "avatar": p.avatar, "streak": p.streak, "right": p.right, "answered": p.id in self.answers,
+                 "avatar": p.avatar, "streak": p.streak, "right": p.right,
+                 "answered": p.id in (self.song_picks if self.step == "pick" else self.answers),
                  "team": p.team}
                 for p in sorted(self.players.values(), key=lambda p: p.joined_at)
             ],
         }
-        if q:
+        if q and q.kind == "song":
+            out["question"] = self._song_view(q, me)
+        elif q:
             mine = self.answers.get(me) if me else None
             out["question"] = {
                 "index": self.qi, "total": len(self.questions), "category": q.category, "kind": q.kind,
@@ -898,7 +1134,11 @@ class Room:
                 "my_answer": mine[0] if mine else None,
                 "waiting_on": sum(1 for pid in self.players if pid not in self.answers and pid not in q.subjects),
             }
-        if self.phase == "reveal" and q:
+        if self.phase == "reveal" and q and q.kind == "song":
+            out["reveal"] = {"correct": q.correct, "subjects": q.subjects, "explain": q.explain, "picks": {},
+                             "points": self.last_points, "reactions": self.reactions.get(str(self.qi), []),
+                             "song": self.song_result}
+        elif self.phase == "reveal" and q:
             out["reveal"] = {
                 "correct": q.correct, "subjects": q.subjects, "explain": q.explain,
                 "picks": {pid: c for pid, (c, _) in self.answers.items()},

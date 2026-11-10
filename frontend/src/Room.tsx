@@ -190,6 +190,7 @@ export function Room({ code }: { code: string }) {
           state={state}
           isHost={isHost}
           onAnswer={(id) => act(() => api.answer(code, creds, id))}
+          onPick={(t) => act(() => api.pick(code, creds, t))}
           onNext={() => act(() => api.next(code, creds))}
           onReact={(label) => act(() => api.react(code, creds, label))}
         />
@@ -240,6 +241,7 @@ type LobbyProps = {
     mode?: Mode;
     teams?: boolean;
     ai?: boolean;
+    soundtrack?: boolean;
   }) => void;
   onShuffle: () => void;
   onKick: (pid: string) => void;
@@ -409,6 +411,12 @@ function Lobby({
                 </fieldset>
                 <div className="flex flex-wrap gap-2">
                   <Chip
+                    on={state.soundtrack}
+                    onClick={() => onSettings({ soundtrack: !state.soundtrack })}
+                  >
+                    Soundtrack finale {state.soundtrack ? "on" : "off"}
+                  </Chip>
+                  <Chip
                     on={state.teams}
                     onClick={() => onSettings({ teams: !state.teams })}
                   >
@@ -428,6 +436,13 @@ function Lobby({
                     </Chip>
                   )}
                 </div>
+                {state.soundtrack && (
+                  <p className="font-mono text-[12px] leading-relaxed opacity-80">
+                    After the quiz: 3 Soundtrack rounds. A moment drops, everyone
+                    picks a song from their own top songs, and the room votes on
+                    the anonymous picks.
+                  </p>
+                )}
                 {state.ai && (
                   <p className="font-mono text-[12px] leading-relaxed opacity-80">
                     Claude rewrites how each question sounds. Names, songs and
@@ -445,7 +460,8 @@ function Lobby({
                 {state.players.length} in the room. Waiting for{" "}
                 {host?.name ?? "the host"} to start a {state.length}-question{" "}
                 {mode.label} game
-                {state.teams ? " in teams" : ""}.
+                {state.teams ? " in teams" : ""}
+                {state.soundtrack ? ", then Soundtrack" : ""}.
               </p>
               </>
             )}

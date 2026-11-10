@@ -205,6 +205,14 @@ class Settings(Who):
     mode: str | None = Field(default=None, max_length=16)
     teams: bool | None = None
     ai: bool | None = None
+    soundtrack: bool | None = None
+
+
+class SongPick(Who):
+    name: str = Field(max_length=200)
+    artist: str = Field(max_length=200)
+    image: str | None = Field(default=None, max_length=500)
+    id: str | None = Field(default=None, max_length=40)
 
 
 class React(Who):
@@ -515,7 +523,7 @@ def settings(code: str, body: Settings):
     _host(room, body.pid, body.key)
     if body.ai and not ai.configured():
         raise HTTPException(400, "AI wording isn't set up on this server.")
-    return _act(room, lambda: room.settings(body.length, body.mode, body.teams, body.ai), body.pid)
+    return _act(room, lambda: room.settings(body.length, body.mode, body.teams, body.ai, body.soundtrack), body.pid)
 
 
 @app.post("/api/rooms/{code}/shuffle-teams")
@@ -544,9 +552,11 @@ async def start(code: str, body: Who):
         names = [p.name for p in room.players.values()]
         entities = {a["name"] for p in room.players.values() for k in ("top_artists_long", "top_artists_short") for a in p.profile.get(k, [])}
         entities |= {g for p in room.players.values() for k in ("top_artists_long", "top_artists_short") for a in p.profile.get(k, []) for g in a.get("genres") or []}
-        texts = [q.text for q in questions]
+        # Soundtrack prompts are written by hand; only the quiz gets reworded.
+        quiz = [q for q in questions if q.kind != "song"]
+        texts = [q.text for q in quiz]
         keep = [[e for e in entities if e in t] + re.findall(r"\d+", t) for t in texts]
-        for q, t in zip(questions, await ai.reword(texts, names, keep)):
+        for q, t in zip(quiz, await ai.reword(texts, names, keep)):
             q.text = t
     return _act(room, lambda: room.begin(questions), body.pid)
 
@@ -556,6 +566,25 @@ def answer(code: str, body: Answer):
     room = _room(code)
     _auth(room, body.pid, body.key)
     return _act(room, lambda: room.answer(body.pid, body.choice), body.pid)
+
+
+@app.post("/api/rooms/{code}/pick")
+async def pick(code: str, body: SongPick):
+    room = _room(code)
+    _auth(room, body.pid, body.key)
+    track = {"name": body.name, "artist": body.artist, "image": body.image, "id": body.id}
+    if not track["id"] and spotify.search_configured():
+        # A Spotify id lets the reveal play the song. Best effort: a miss
+        # just means the card shows art without a player.
+        try:
+            hits = await spotify.search(f"{body.name} {body.artist}"[:80], "track")
+            hit = next((h for h in hits if h["artist"].lower() == body.artist.lower()), hits[0] if hits else None)
+            if hit:
+                track["id"] = hit.get("id")
+                track["image"] = track["image"] or hit.get("image")
+        except (spotify.SpotifyError, httpx.HTTPError):
+            pass
+    return _act(room, lambda: room.pick_song(body.pid, track), body.pid)
 
 
 @app.post("/api/rooms/{code}/next")

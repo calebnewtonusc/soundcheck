@@ -21,6 +21,19 @@ export type Option = {
   label: string;
   sub: string;
   image: string | null;
+  track_id?: string | null;
+  mine?: boolean;
+};
+
+export type Track = { name: string; artist: string; image: string | null; id?: string | null };
+
+export type SongCard = Option & {
+  owner: string;
+  votes: number;
+  voters: string[];
+  winner: boolean;
+  points: number;
+  notes: string[];
 };
 
 export type Card = {
@@ -41,6 +54,7 @@ export type RoomState = {
   mode: Mode;
   teams: boolean;
   ai: boolean;
+  soundtrack: boolean;
   me: string | null;
   team_scores?: { red: number; blue: number };
   season?: Season;
@@ -49,8 +63,14 @@ export type RoomState = {
     index: number;
     total: number;
     category: "songs" | "artists" | "genre";
-    kind: "who" | "pick";
+    kind: "who" | "pick" | "song";
     text: string;
+    hint?: string;
+    step?: "pick" | "vote" | "done";
+    judge?: string | null;
+    deck?: Track[];
+    my_pick?: Track | null;
+    can_vote?: boolean;
     image: string | null;
     options: Option[];
     seconds: number;
@@ -66,6 +86,7 @@ export type RoomState = {
     picks: Record<string, string>;
     points: Record<string, number>;
     reactions: [string, string][];
+    song?: { cards: SongCard[]; judge: string | null; missed: string[] };
   };
   cards?: Card[];
 };
@@ -122,12 +143,14 @@ export const api = {
   bots: (code: string, c: Creds) => post<RoomState>(`/api/rooms/${code}/bots`, c),
   leave: (code: string, c: Creds) => post<RoomState>(`/api/rooms/${code}/leave`, c),
   kick: (code: string, c: Creds, target: string) => post<RoomState>(`/api/rooms/${code}/kick/${target}`, c),
-  settings: (code: string, c: Creds, s: { length?: number; mode?: Mode; teams?: boolean; ai?: boolean }) =>
+  settings: (code: string, c: Creds, s: { length?: number; mode?: Mode; teams?: boolean; ai?: boolean; soundtrack?: boolean }) =>
     post<RoomState>(`/api/rooms/${code}/settings`, { ...c, ...s }),
   shuffleTeams: (code: string, c: Creds) => post<RoomState>(`/api/rooms/${code}/shuffle-teams`, c),
   react: (code: string, c: Creds, label: string) => post<RoomState>(`/api/rooms/${code}/react`, { ...c, label }),
   start: (code: string, c: Creds) => post<RoomState>(`/api/rooms/${code}/start`, c),
   answer: (code: string, c: Creds, choice: string) => post<RoomState>(`/api/rooms/${code}/answer`, { ...c, choice }),
+  pick: (code: string, c: Creds, t: Track) => post<RoomState>(`/api/rooms/${code}/pick`, { ...c, ...t }),
+  searchTracks: (q: string) => call<Track[]>(`/api/search?${new URLSearchParams({ q, kind: "track" })}`),
   next: (code: string, c: Creds) => post<RoomState>(`/api/rooms/${code}/next`, c),
   rematch: (code: string, c: Creds) => post<RoomState>(`/api/rooms/${code}/rematch`, c),
   health: () => call<{ spotify: boolean; ai: boolean; search: boolean; spotify_spots_left: number }>("/api/health"),
