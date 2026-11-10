@@ -569,11 +569,23 @@ def answer(code: str, body: Answer):
 
 
 @app.post("/api/rooms/{code}/pick")
-async def pick(code: str, body: SongPick):
+async def pick(request: Request, code: str, body: SongPick):
     room = _room(code)
     _auth(room, body.pid, body.key)
-    track = {"name": body.name, "artist": body.artist, "image": body.image, "id": body.id}
-    if not track["id"] and spotify.search_configured():
+    # Art is shown to every phone in the room, so only the music hosts'.
+    image = body.image if body.image and body.image.startswith(IMAGE_HOST) else None
+    track = {"name": body.name, "artist": body.artist, "image": image, "id": body.id}
+    q = room.questions[room.qi] if room.phase == "question" and room.questions else None
+    open_pick = (q is not None and q.kind == "song" and room.step == "pick"
+                 and body.pid not in q.subjects and body.pid not in room.song_picks)
+    hits_log = searches[_ip(request)]
+    now = time.time()
+    while hits_log and now - hits_log[0] > 60:
+        hits_log.popleft()
+    # Only spend a Spotify search on a pick that can still land, and count it
+    # against the same per-IP limit /api/search uses.
+    if open_pick and not track["id"] and spotify.search_configured() and len(hits_log) < SEARCH_LIMIT:
+        hits_log.append(now)
         # A Spotify id lets the reveal play the song. Best effort: a miss
         # just means the card shows art without a player.
         try:
